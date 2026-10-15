@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "workspaces": {
-    "packages": ["packages/*", "examples/*"],
+    "packages": [
+      "packages/*",
+      "examples/*"
+    ],
     "catalog": {
       "zod": "4.6.7",
       "hono": "4.13.13",
@@ -19,7 +22,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check": "bun run typecheck && bun test"
+    "check": "bun run typecheck && bun test",
+    "example:api": "bun run --filter example-api-only dev"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

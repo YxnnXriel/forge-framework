@@ -1,0 +1,13 @@
+{
+  "name": "example-api-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/main.ts",
+    "start": "bun src/main.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "forge": "workspace:*"
+  }
+}

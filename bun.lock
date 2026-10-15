@@ -9,6 +9,12 @@
         "typescript": "catalog:",
       },
     },
+    "examples/api-only": {
+      "name": "example-api-only",
+      "dependencies": {
+        "forge": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@forge/core",
       "version": "0.0.0",
@@ -30,7 +36,21 @@
       "dependencies": {
         "@forge/core": "workspace:*",
         "@forge/env": "workspace:*",
+        "@forge/server": "workspace:*",
         "zod": "catalog:",
+      },
+    },
+    "packages/server": {
+      "name": "@forge/server",
+      "version": "0.0.0",
+      "dependencies": {
+        "@forge/core": "workspace:*",
+        "@forge/env": "workspace:*",
+        "hono": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "typescript": "catalog:",
       },
     },
   },
@@ -50,13 +70,19 @@
 
     "@forge/env": ["@forge/env@workspace:packages/env"],
 
+    "@forge/server": ["@forge/server@workspace:packages/server"],
+
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
+    "example-api-only": ["example-api-only@workspace:examples/api-only"],
+
     "forge": ["forge@workspace:packages/forge"],
+
+    "hono": ["hono@4.13.13", "", {}, "sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA=="],
 
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 

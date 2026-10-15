@@ -2,5 +2,3 @@
 linker = "isolated"
 exact = true
 
-[test]
-root = "packages"
