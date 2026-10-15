@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.forge/
+*.log
+.DS_Store
+
+# Secrets : seul .env.example est versionné
+.env
+.env.*
+!.env.example
+
+# Prisma
+generated/

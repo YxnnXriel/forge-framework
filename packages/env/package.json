@@ -1,0 +1,13 @@
+{
+  "name": "@forge/env",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@forge/core": "workspace:*",
+    "zod": "catalog:"
+  }
+}
