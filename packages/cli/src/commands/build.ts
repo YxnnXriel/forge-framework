@@ -14,7 +14,8 @@ import {
   serverBundlePlugin,
   constants,
 } from "@forge/web";
-import { assertBun, ms, type Out } from "../util.ts";
+import { bytes, duration, symbols } from "@forge/core/term";
+import { assertBun, type Out } from "../util.ts";
 import { generate } from "./db.ts";
 
 export type BuildTarget = "bun" | "vercel";
@@ -278,35 +279,54 @@ async function writeVercel(root: string, buildDir: string, staticFiles: { client
 
 export async function build(root: string, options: BuildOptions, out: Out): Promise<number> {
   assertBun();
-  const started = Bun.nanoseconds();
+  const started = performance.now();
   const target: BuildTarget = options.target ?? (Bun.env.VERCEL ? "vercel" : "bun");
   if (target === "vercel" && options.compile) {
     throw new ForgeError("FORGE_BUILD", "--compile is not available for Vercel (it runs server.js on its Bun runtime)");
   }
+  const { ui } = out;
+  ui.header("build", [target === "vercel" ? "vercel" : null, options.compile ? "single executable" : null].filter(Boolean).join(" · ") || "bun");
   const config = await loadConfig(root);
   if (target === "vercel" && config.db?.provider === "sqlite") {
-    out.error("warning: SQLite files do not persist on Vercel (read-only, ephemeral functions): use postgresql there");
+    ui.warn("SQLite files do not persist on Vercel (read-only, ephemeral functions): use postgresql there");
   }
   if (config.db && (await generate(root, out, { ifNeeded: true })) !== 0) return 1;
 
   // The native engine is embedded when it is built for this machine (Docker/VPS);
   // Vercel uses the TypeScript fallback.
   const embedEngine = target === "bun" && engine() !== null;
-  const { code, staticFiles } = await serverEntry(root, config, target, embedEngine);
+  const { code, staticFiles } = await ui.step(
+    config.web ? "Pages & client bundle" : "Server entry",
+    () => serverEntry(root, config, target, embedEngine),
+    (r) => (r.staticFiles ? `${r.staticFiles.client.length} files` : undefined),
+  );
   const entry = join(root, ENTRY);
   await Bun.write(entry, code);
 
   const buildDir = join(root, BUILD_DIR);
   await rm(buildDir, { recursive: true, force: true });
   await mkdir(buildDir, { recursive: true });
-  await bundleServer(root, entry, buildDir, options.compile === true);
-
   const output = join(buildDir, options.compile ? "server" : "server.js");
-  const size = (Bun.file(output).size / 1e6).toFixed(1);
-  out.log(
-    `Built ${relative(root, output)} (${size} MB, engine: ${embedEngine ? "native" : "typescript"}) in ${ms(started)}`,
+  await ui.step(
+    options.compile ? "Executable (bytecode)" : "Server bundle",
+    () => bundleServer(root, entry, buildDir, options.compile === true),
+    () => bytes(Bun.file(output).size),
   );
-  if (staticFiles) out.log(`  client: ${staticFiles.client.length} files, public: ${Object.keys(staticFiles.public).length} files`);
-  if (target === "vercel") out.log(`  vercel: ${relative(root, await writeVercel(root, buildDir, staticFiles))}`);
+  const vercel = target === "vercel" ? await ui.step("Vercel output", () => writeVercel(root, buildDir, staticFiles)) : null;
+
+  out.log(`\n  ${ui.p.green(symbols.ok)} ${ui.p.bold("Built")} ${ui.p.dim("in")} ${duration(performance.now() - started)}\n`);
+  const rows: [string, string][] = [["output", `${relative(root, output)}  ${ui.p.dim(bytes(Bun.file(output).size))}`]];
+  if (staticFiles) {
+    const raw = staticFiles.client.reduce((n, f) => n + Bun.file(f.path).size, 0);
+    const br = staticFiles.client.reduce((n, f) => n + Bun.file(f.br ?? f.path).size, 0);
+    rows.push(["client", `${staticFiles.client.length} files ${ui.p.dim(symbols.dot)} ${bytes(raw)} ${ui.p.dim("→")} ${ui.p.green(bytes(br))} ${ui.p.dim("brotli")}`]);
+    const pub = Object.keys(staticFiles.public).length;
+    if (pub) rows.push(["public", `${pub} file${pub > 1 ? "s" : ""}`]);
+  }
+  rows.push(["engine", embedEngine ? ui.p.green("Rust, embedded") : ui.p.yellow("TypeScript fallback")]);
+  if (vercel) rows.push(["vercel", relative(root, vercel)]);
+  rows.push(["run", ui.p.cyan(target === "vercel" ? "deployed by Vercel" : "bun forge start")]);
+  ui.table(rows);
+  out.log("");
   return 0;
 }

@@ -11,16 +11,18 @@ import { assertBun, extraModels, refreshTypes, resolveBin, type DbConfig, type O
  */
 export async function check(root: string, out: Out): Promise<number> {
   assertBun();
+  const { ui } = out;
+  ui.header("check");
   let failed = false;
   const config = await loadConfig(root);
-  out.log("✓ forge.config.ts");
+  ui.ok("forge.config.ts");
 
   if (config.db) {
     const status = await schemaStatus(root, config.apps, config.db.provider, await extraModels(config as DbConfig));
-    if (status === "in-sync") out.log("✓ Prisma schema in sync with the models");
+    if (status === "in-sync") ui.ok("Prisma schema in sync with the models");
     else {
       failed = true;
-      out.error(`✗ Prisma schema ${status === "missing" ? "not generated" : "out of date"}: run \`forge db generate\``);
+      ui.fail(`Prisma schema ${status === "missing" ? "not generated" : "out of date"}: run \`bun forge db generate\``);
     }
   }
 
@@ -30,15 +32,26 @@ export async function check(root: string, out: Out): Promise<number> {
   const tsconfig = join(root, "tsconfig.json");
   if (!existsSync(tsconfig)) throw new ForgeError("FORGE_CHECK", "No tsconfig.json in the project");
   const tool = config.web
-    ? { pkg: "svelte-check", bin: "svelte-check", args: ["--tsconfig", tsconfig, "--threshold", "error"] }
+    ? { pkg: "svelte-check", bin: "svelte-check", args: ["--tsconfig", tsconfig, "--threshold", "error", "--output", "human"] }
     : { pkg: "typescript", bin: "tsc", args: ["--noEmit", "-p", tsconfig] };
   const bin = resolveBin(root, tool.pkg, tool.bin);
   if (!bin) {
-    out.error(`✗ ${tool.pkg} is not installed in the project: bun add -d ${tool.pkg}`);
+    ui.fail(`${tool.pkg} is not installed in the project: bun add -d ${tool.pkg}`);
     return 1;
   }
-  const proc = Bun.spawn(["bun", bin, ...tool.args], { cwd: root, stdio: ["inherit", "inherit", "inherit"] });
-  if ((await proc.exited) !== 0) failed = true;
-  else out.log(`✓ types (${tool.bin})`);
+  // Output shown only when something is wrong.
+  const typed = await ui
+    .step(`Types (${tool.bin})`, async () => {
+      const proc = Bun.spawn(["bun", bin, ...tool.args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      const [code, stdout, stderr] = await Promise.all([proc.exited, new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+      if (code !== 0) throw new Error((stdout + stderr).trim());
+    })
+    .then(() => true)
+    .catch((err: Error) => {
+      out.error(err.message.split("\n").map((l) => `    ${l}`).join("\n"));
+      return false;
+    });
+  if (!typed) failed = true;
+  out.log("");
   return failed ? 1 : 0;
 }

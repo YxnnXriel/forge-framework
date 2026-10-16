@@ -63,7 +63,6 @@ function packageJson(o: NewProjectOptions, slug: string, inRepo: boolean): strin
         start: "forge start",
         check: "forge check",
         test: "bun test",
-        forge: "forge",
       },
       dependencies,
       devDependencies,
@@ -92,6 +91,9 @@ function config(o: NewProjectOptions): string {
   if (o.auth) {
     lines.push(
       "  // Better Auth, with its native options: https://better-auth.com/docs",
+      "  // Routes on /api/auth. In handlers: `await session()` (null when signed out),",
+      "  // `access: authenticated` to require a user. In pages: createAuthClient()",
+      "  // from \"forge/auth/client\" (sign up, sign in, sign out).",
       "  auth: {",
       "    emailAndPassword: { enabled: true },",
       "  },",
@@ -177,19 +179,22 @@ export default defineUrls({
 });
 `;
 
-function layout(title: string, auth: boolean): string {
-  return `<!-- Root layout: wraps every page. Kept across client-side navigations. -->
+function layout(title: string): string {
+  return `<!-- Root layout: wraps every page and stays mounted across client-side
+     navigations (its state survives). Nested folders can have their own
+     +layout.svelte. -->
 <script lang="ts">
-${auth ? '  import { forge } from "forge:router";\n' : ""}  import { page } from "forge:web";
+  import { page } from "forge:web";
+  // The page being shown is rendered where {@render children()} is.
   let { children } = $props();
-${auth ? "\n  // Signed-in user (Better Auth session), or null.\n  const me = await forge.account.me();\n" : ""}</script>
+</script>
 
 <header>
   <a href="/" class="brand">${title}</a>
   <nav>
     <a href="/" aria-current={page.route === "/" ? "page" : undefined}>Home</a>
-    <!-- forge:nav (bun forge startapp adds links above) -->
-  </nav>${auth ? '\n  <a href="/login" class="me">{me ? me.name : "Sign in"}</a>' : ""}
+    <!-- forge:nav (\`bun forge example\` adds its links above this line) -->
+  </nav>
 </header>
 
 <main>
@@ -199,95 +204,27 @@ ${auth ? "\n  // Signed-in user (Better Auth session), or null.\n  const me = aw
 <style>
   :global(body) { margin: 0; font-family: system-ui, sans-serif; color: #1f1d2b; }
   header { display: flex; gap: 1.5rem; align-items: center; padding: 1rem 2rem; border-bottom: 1px solid #e4e2ee; }
-  .brand { font-weight: 700; color: #6d28d9; text-decoration: none; }
-  nav { display: flex; gap: 1rem; flex: 1; }
+  .brand { font-weight: 700; color: #7c3aed; text-decoration: none; }
+  nav { display: flex; gap: 1rem; }
   nav a { color: inherit; }
   main { padding: 2rem; max-width: 48rem; }
 </style>
 `;
 }
 
-const HOME = (title: string) => `<!-- Page "/": the home page. -->
+const HOME = (title: string) => `<!-- Page "/": src/web/+page.svelte. Every +page.svelte under src/web is a
+     route: src/web/about/+page.svelte -> /about, src/web/posts/[id]/+page.svelte
+     -> /posts/:id (page.params.id from "forge:web").
+
+     Data comes from your apps' remote functions, awaited right here: rendered
+     on the server, reused by the browser without a second call.
+       import { forge } from "forge:router";
+       const items = await forge.todos.list();
+-->
 <svelte:head><title>${title}</title></svelte:head>
 
 <h1>${title}</h1>
-<p>Create your first app: <code>bun forge startapp todos</code></p>
-`;
-
-const ACCOUNT_REPOSITORY = `// "account" app: who is signed in. Better Auth itself is mounted on /api/auth.
-import { defineRepository, z } from "forge/server";
-
-export const account = defineRepository(({ get }) => ({
-  // GET /api/account/me, and \`forge.account.me()\` in pages.
-  me: get("/me", {
-    output: z.object({ id: z.string(), name: z.string(), email: z.string() }).nullable(),
-    remote: true,
-    handler: async ({ session }) => {
-      const current = await session();
-      return current ? { id: current.user.id, name: current.user.name, email: current.user.email } : null;
-    },
-  }),
-}));
-`;
-
-const AUTH_CLIENT = `// Better Auth's Svelte client (sign up, sign in, sign out), created on first use.
-import { createAuthClient } from "forge/auth/client";
-
-let client: ReturnType<typeof createAuthClient> | undefined;
-export function authClient() {
-  return (client ??= createAuthClient());
-}
-`;
-
-const LOGIN = `<!-- Page "/login": sign up, sign in and sign out with Better Auth. -->
-<script lang="ts">
-  import { forge } from "forge:router";
-  import { authClient } from "../../lib/auth-client.ts";
-
-  const me = await forge.account.me();
-  let name = $state("");
-  let email = $state("");
-  let password = $state("");
-  let message = $state("");
-
-  // The session changed: reload so every layout reads the new user.
-  const reload = () => location.assign("/");
-
-  async function signUp(event: SubmitEvent) {
-    event.preventDefault();
-    const { error } = await authClient().signUp.email({ name, email, password });
-    if (error) message = error.message ?? "Sign up failed";
-    else reload();
-  }
-
-  async function signIn() {
-    const { error } = await authClient().signIn.email({ email, password });
-    if (error) message = error.message ?? "Sign in failed";
-    else reload();
-  }
-
-  async function signOut() {
-    await authClient().signOut();
-    reload();
-  }
-</script>
-
-<svelte:head><title>Account</title></svelte:head>
-
-{#if me}
-  <h1>Hello {me.name}</h1>
-  <button onclick={signOut}>Sign out</button>
-{:else}
-  <h1>Sign in</h1>
-  <form onsubmit={signUp}>
-    <input bind:value={name} placeholder="Name (sign up)" />
-    <input type="email" bind:value={email} placeholder="Email" required />
-    <input type="password" bind:value={password} placeholder="Password" required />
-    <button type="submit">Create an account</button>
-    <button type="button" onclick={signIn}>Sign in</button>
-  </form>
-  <p>{message}</p>
-{/if}
+<p>Edit <code>src/web/+page.svelte</code>, or create an app: <code>bun forge startapp &lt;name&gt;</code></p>
 `;
 
 function smokeTest(o: NewProjectOptions): string {
@@ -357,21 +294,8 @@ export function planProject(o: NewProjectOptions, cwd: string): ProjectPlan {
   if (api) files["src/urls.ts"] = URLS;
   if (web) {
     files["svelte.config.js"] = SVELTE_CONFIG;
-    files["src/web/+layout.svelte"] = layout(title, o.auth);
+    files["src/web/+layout.svelte"] = layout(title);
     files["src/web/+page.svelte"] = HOME(title);
-  }
-  if (o.auth) {
-    files["src/apps/account/repository.ts"] = ACCOUNT_REPOSITORY;
-    if (web) {
-      files["src/lib/auth-client.ts"] = AUTH_CLIENT;
-      files["src/web/login/+page.svelte"] = LOGIN;
-    }
-  }
-  if (api && o.auth) {
-    files["src/urls.ts"] = URLS.replace(
-      'import { defineUrls } from "forge/server";\n',
-      'import { defineUrls } from "forge/server";\nimport { account } from "./apps/account/repository.ts";\n',
-    ).replace("defineUrls({\n", 'defineUrls({\n  "/api/account": account,\n');
   }
   return { root, repo, files };
 }
@@ -386,7 +310,7 @@ async function registerWorkspace(repo: string, root: string, out: Out) {
   if (list.includes(glob)) return;
   list.push(glob);
   await Bun.write(file, JSON.stringify(pkg, null, 2) + "\n");
-  out.log(`  added "${glob}" to the workspaces of ${relative(process.cwd(), file) || "package.json"}`);
+  out.ui.file("change", `${relative(process.cwd(), file) || "package.json"} (workspaces: ${glob})`);
 }
 
 export async function writeProject(plan: ProjectPlan, out: Out): Promise<void> {

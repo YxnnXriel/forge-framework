@@ -104,29 +104,30 @@ function vercelJson(config: ResolvedConfig): string {
 
 async function write(path: string, content: string, out: Out, force: boolean): Promise<boolean> {
   if (existsSync(path) && !force) {
-    out.error(`${path} already exists (--force to overwrite)`);
+    out.ui.fail(`${path} already exists (--force to overwrite)`);
     return false;
   }
   await Bun.write(path, content);
-  out.log(`wrote ${path}`);
+  out.ui.file("add", relative(process.cwd(), path) || path);
   return true;
 }
 
 /** `forge setup docker|vercel`: deployment files for this project. */
 export async function setup(root: string, target: string | undefined, force: boolean, out: Out): Promise<number> {
+  out.ui.header("setup", target);
   const config = await loadConfig(root);
   if (target === "docker") {
     const repo = workspaceRoot(root);
     const ok = await write(join(root, "Dockerfile"), dockerfile(root, config), out, force);
     const ignore = join(repo ?? root, ".dockerignore");
     if (!existsSync(ignore)) await write(ignore, DOCKERIGNORE, out, false);
-    if (repo) out.log(`Build from the repository root: docker build -f ${relative(repo, join(root, "Dockerfile"))} .`);
+    if (repo) out.ui.next([`docker build -f ${relative(repo, join(root, "Dockerfile"))} .   (from the repository root)`]);
     return ok ? 0 : 1;
   }
   if (target === "vercel") {
-    if (config.db?.provider === "sqlite") out.error("warning: SQLite does not persist on Vercel: use postgresql there");
+    if (config.db?.provider === "sqlite") out.ui.warn("SQLite does not persist on Vercel: use postgresql there");
     return (await write(join(root, "vercel.json"), vercelJson(config), out, force)) ? 0 : 1;
   }
-  out.error("Usage: forge setup docker|vercel [--force]");
+  out.ui.fail("Usage: bun forge setup docker|vercel [--force]");
   return 1;
 }

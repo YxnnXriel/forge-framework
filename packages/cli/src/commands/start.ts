@@ -10,7 +10,7 @@ export async function start(root: string, args: string[], out: Out): Promise<num
   const script = join(dir, "server.js");
   const cmd = existsSync(binary) ? [binary, ...args] : existsSync(script) ? ["bun", script, ...args] : null;
   if (!cmd) {
-    out.error("No build found: run `forge build` first");
+    out.ui.fail("No build found: run `bun forge build` first");
     return 1;
   }
   const child = Bun.spawn(cmd, {

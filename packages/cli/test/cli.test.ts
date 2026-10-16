@@ -27,7 +27,8 @@ describe("forge CLI", () => {
   test("help", async () => {
     const c = capture();
     expect(await run([], { out: c.out })).toBe(0);
-    expect(c.logs.join()).toContain("forge db migrate");
+    expect(c.logs.join()).toContain("db migrate");
+    expect(c.logs.join()).toContain("startapp <name>");
   });
 
   test("unknown command", async () => {
@@ -51,7 +52,7 @@ export class Article extends Model { static model = { title: model.string() }; }
     const c = capture();
     // No Prisma installed in the temp project: schema is written, then a clear error.
     expect(await run(["db", "generate"], { root, out: c.out })).toBe(1);
-    expect(c.logs.join("\n")).toContain("Models: Article");
+    expect(c.logs.join("\n")).toContain("Prisma schema  Article");
     expect(existsSync(join(root, "prisma/schema/forge.generated.prisma"))).toBe(true);
     expect(await Bun.file(join(root, "prisma/schema/schema.prisma")).text()).toContain('provider = "postgresql"');
     expect(existsSync(join(root, "prisma.config.ts"))).toBe(true);
@@ -96,7 +97,8 @@ describe("forge build / start / setup", () => {
     const root = join(examples, "web-only");
     const c = capture();
     expect(await run(["build"], { root, out: c.out })).toBe(0);
-    expect(c.logs.join()).toContain("Built .forge/build/server.js");
+    expect(c.logs.join("\n")).toContain(".forge/build/server.js");
+    expect(c.logs.join("\n")).toContain("brotli");
     // No compiler and no bundler in the production server.
     const server = await Bun.file(join(root, ".forge/build/server.js")).text();
     expect(server).not.toContain("svelte/compiler");
@@ -152,7 +154,7 @@ describe("forge build / start / setup", () => {
     const root = await project(`export default { api: {} };`);
     const c = capture();
     expect(await run(["start"], { root, out: c.out })).toBe(1);
-    expect(c.errors.join()).toContain("run `forge build` first");
+    expect(c.errors.join()).toContain("run `bun forge build` first");
   });
 
   test("setup docker: multi-stage build, compiled executable, migrations on start", async () => {

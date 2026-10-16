@@ -1,6 +1,8 @@
 import { ForgeError, loadConfig, type ResolvedConfig } from "@forge/core";
 
-export type Out = { log: (msg: string) => void; error: (msg: string) => void };
+import type { Ui } from "./ui.ts";
+
+export type Out = { log: (msg: string) => void; error: (msg: string) => void; ui: Ui };
 
 export type DbConfig = ResolvedConfig & { db: NonNullable<ResolvedConfig["db"]> };
 
@@ -51,7 +53,7 @@ export async function refreshTypes(root: string, out?: Out): Promise<boolean> {
     await mod.refreshTypes(root);
     return true;
   } catch (err) {
-    out?.error(`warning: types not refreshed (${err instanceof Error ? err.message.split("\n")[0] : String(err)})`);
+    out?.ui.warn(`types not refreshed (${err instanceof Error ? err.message.split("\n")[0] : String(err)})`);
     return false;
   }
 }

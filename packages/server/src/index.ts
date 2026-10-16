@@ -47,3 +47,5 @@ export {
   type RpcReply,
 } from "./remote.ts";
 export type { Context } from "hono";
+
+export { withRequestLog, type RequestLogOptions } from "./logger.ts";

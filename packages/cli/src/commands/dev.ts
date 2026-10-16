@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, watch, type FSWatcher } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { Subprocess } from "bun";
+import { symbols } from "@forge/core/term";
 import { assertBun, type Out } from "../util.ts";
 
 /** Paths that never restart the server (outputs, dependencies, databases). */
@@ -45,7 +46,7 @@ export async function dev(root: string, out: Out): Promise<number> {
     // The project's own `forge` package (the CLI cannot depend on it).
     entry = Bun.resolveSync("forge/internal/dev", root);
   } catch {
-    out.error("The `forge` package is not installed in this project");
+    out.ui.fail("The `forge` package is not installed in this project (bun install)");
     return 1;
   }
   const fromDotenv = dotenvValues(root);
@@ -54,11 +55,18 @@ export async function dev(root: string, out: Out): Promise<number> {
   let timer: Timer | null = null;
   let restarting = false;
 
+  let restarts = 0;
   const spawn = () => {
     child = Bun.spawn(["bun", entry, root], {
       cwd: root,
       stdio: ["inherit", "inherit", "inherit"],
-      env: { ...childEnv(fromDotenv), NODE_ENV: "development" },
+      env: {
+        ...childEnv(fromDotenv),
+        NODE_ENV: "development",
+        // The child prints the full banner once, then one line per restart.
+        ...(restarts++ ? { FORGE_DEV_RESTART: "1" } : {}),
+        ...(out.ui.p.on ? { FORCE_COLOR: "1" } : {}),
+      },
     });
   };
 
@@ -67,12 +75,16 @@ export async function dev(root: string, out: Out): Promise<number> {
     restarting = true;
     const files = [...changed];
     changed = new Set();
-    out.log(`\n[forge] ${files.slice(0, 3).join(", ")}${files.length > 3 ? ` +${files.length - 3}` : ""} changed, restarting`);
+    const { p } = out.ui;
+    out.log(
+      `\n  ${p.brand(symbols.restart)} ${files.slice(0, 3).map((f) => p.accent(f)).join(p.dim(", "))}` +
+        `${files.length > 3 ? p.dim(` +${files.length - 3}`) : ""} ${p.dim("changed")}`,
+    );
     if (files.some((f) => MODELS.test(f))) {
       const { generate } = await import("./db.ts");
       const { loadConfig } = await import("@forge/core");
       // Fresh import: the config may itself have changed.
-      if ((await loadConfig(root)).db) await generate(root, out, { ifNeeded: true }).catch((e) => out.error(String(e)));
+      if ((await loadConfig(root)).db) await generate(root, out, { ifNeeded: true }).catch((e: unknown) => out.ui.fail(String(e)));
     }
     const previous = child as Subprocess | null;
     if (previous) {
@@ -99,7 +111,7 @@ export async function dev(root: string, out: Out): Promise<number> {
       schedule();
     });
   } catch (err) {
-    out.error(`Cannot watch ${root}: ${(err as Error).message}`);
+    out.ui.fail(`Cannot watch ${root}: ${(err as Error).message}`);
     return 1;
   }
 

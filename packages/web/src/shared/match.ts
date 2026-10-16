@@ -55,16 +55,26 @@ function build<R extends RoutePattern>(routes: readonly R[]): Node<R> {
   return root;
 }
 
-function walk<R>(n: Node<R>, parts: string[], i: number, values: string[]): R | null {
-  if (i === parts.length) return n.route;
-  const next = n.statics.get(parts[i]!);
+/**
+ * Walks the path string directly: no split/filter/map arrays, and
+ * decodeURIComponent only for segments containing "%". Param values are
+ * collected in `values` (backtracking pops them).
+ */
+function walk<R>(n: Node<R>, path: string, i: number, values: string[]): R | null {
+  while (i < path.length && path.charCodeAt(i) === 47 /* / */) i++;
+  if (i >= path.length) return n.route;
+  let end = path.indexOf("/", i);
+  if (end < 0) end = path.length;
+  const raw = path.slice(i, end);
+  const seg = raw.indexOf("%") < 0 ? raw : decodeURIComponent(raw);
+  const next = n.statics.get(seg);
   if (next) {
-    const found = walk(next, parts, i + 1, values);
+    const found = walk(next, path, end, values);
     if (found) return found;
   }
   if (n.param) {
-    values.push(parts[i]!);
-    const found = walk(n.param.node, parts, i + 1, values);
+    values.push(seg);
+    const found = walk(n.param.node, path, end, values);
     if (found) return found;
     values.pop();
   }
@@ -77,17 +87,16 @@ export function matchRoute<R extends RoutePattern>(
   routes: readonly R[],
   pathname: string,
 ): { route: R; params: Record<string, string> } | null {
-  let parts: string[];
-  try {
-    parts = splitPath(pathname).map(decodeURIComponent);
-  } catch {
-    return null;
-  }
   let tree = trees.get(routes) as Node<R> | undefined;
   if (!tree) trees.set(routes, (tree = build(routes)) as Node<RoutePattern>);
 
   const values: string[] = [];
-  const route = walk(tree, parts, 0, values);
+  let route: R | null;
+  try {
+    route = walk(tree, pathname, 0, values);
+  } catch {
+    return null; // malformed percent-encoding
+  }
   if (!route) return null;
   // Names come from the matched route itself (not from the shared tree nodes).
   const params: Record<string, string> = {};

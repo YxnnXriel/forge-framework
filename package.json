@@ -26,7 +26,6 @@
     }
   },
   "scripts": {
-    "forge": "bun packages/forge/src/cli.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p examples/api-only && tsc --noEmit -p examples/full-stack && tsc --noEmit -p examples/web-only",
     "check:svelte": "bun run --filter 'example-full-stack' --filter 'example-web-only' check",
@@ -41,7 +40,8 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "typescript": "catalog:",
-    "svelte-check": "catalog:"
+    "svelte-check": "catalog:",
+    "forge": "workspace:*"
   },
   "engines": {
     "bun": ">=1.4.0"

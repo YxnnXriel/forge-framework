@@ -1,3 +1,4 @@
+import { withRequestLog, type RequestLogOptions } from "./logger.ts";
 import { ForgeError } from "@forge/core";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { inRequestScope, provideDeps, provideRequestDeps, type ForgeDeps } from "./deps.ts";
@@ -195,11 +196,15 @@ export function createServer(options: ServerOptions): Hono {
  * Starts the app with `Bun.serve`. `PORT` / `HOST` from the environment win
  * over the config (hosting platforms assign them); then Bun's defaults.
  */
-export function serve(app: Hono, server: { port?: number; hostname?: string } = {}) {
+export function serve(
+  app: Hono,
+  server: { port?: number; hostname?: string } = {},
+  options: { log?: RequestLogOptions | false } = {},
+) {
   const port = Bun.env.PORT ? Number(Bun.env.PORT) : server.port;
   const hostname = Bun.env.HOST ?? server.hostname;
   return Bun.serve({
-    fetch: app.fetch,
+    fetch: options.log ? (withRequestLog(app.fetch as never, options.log) as never) : app.fetch,
     ...(port !== undefined ? { port } : {}),
     ...(hostname !== undefined ? { hostname } : {}),
   });

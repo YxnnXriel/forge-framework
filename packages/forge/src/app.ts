@@ -19,7 +19,9 @@ import type { Context, Hono } from "hono";
 import { join } from "node:path";
 import { databaseUrl } from "@forge/cli/db-url";
 import { buildManifest } from "./manifest.ts";
-import { writeTypes } from "./types.ts";
+import { colorEnabled } from "@forge/core/term";
+import { readyMessage } from "./banner.ts";
+import { scanApps, writeTypes } from "./types.ts";
 
 /** What `src/main.ts` exports by default: the app's own wiring. */
 export type AppDefinition = Omit<ServerOptions, "urls" | "remote">;
@@ -165,7 +167,7 @@ export async function createApp(appOptions: AppOptions = {}): Promise<App> {
 
   if (!built && (config.web || config.db)) {
     await writeTypes(root, {
-      apps,
+      apps: await scanApps(config.apps),
       db: config.db !== null,
       auth: config.auth !== null,
       clientFile: join(root, PRISMA_PATHS.client),
@@ -201,7 +203,17 @@ export async function createApp(appOptions: AppOptions = {}): Promise<App> {
 /** `createApp()` + `Bun.serve()` with the `server` section of the config. */
 export async function startApp(options: AppOptions = {}) {
   const built = await createApp(options);
-  const server = serve(built.app, built.config.server);
-  console.log(`Forge ready on ${server.url}`);
+  const dev = process.env.FORGE_BUILD === "1" ? false : (options.dev ?? Bun.env.NODE_ENV !== "production");
+  const color = colorEnabled();
+  const log =
+    built.config.server.logs === false
+      ? false
+      : {
+          color,
+          // Bundle assets and live-reload events would drown the useful lines.
+          skip: (path: string) => path.startsWith("/_forge/") || path === "/__forge/dev",
+        };
+  const server = serve(built.app, built.config.server, { log });
+  console.log(readyMessage(built.config, server.url, { dev, color, restart: Bun.env.FORGE_DEV_RESTART === "1" }));
   return { ...built, server };
 }

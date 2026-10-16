@@ -23,6 +23,8 @@ export interface ServerConfig {
   /** Defaults to Bun's own resolution (`PORT` / `BUN_PORT` / 3000). */
   port?: number;
   hostname?: string;
+  /** One line per request in the terminal (method, path, status, time). Default: true. */
+  logs?: boolean;
 }
 
 export interface ApiConfig {
@@ -97,6 +99,7 @@ const configSchema = z.strictObject({
     .strictObject({
       port: z.int().min(0).max(65535).optional(),
       hostname: z.string().min(1).optional(),
+      logs: z.boolean().optional(),
     })
     .optional(),
   api: z.union([z.literal(false), z.strictObject({ urls: z.string().min(1).optional() })]).optional(),
@@ -176,6 +179,7 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
   const server: ServerConfig = {};
   if (cfg.server?.port !== undefined) server.port = cfg.server.port;
   if (cfg.server?.hostname !== undefined) server.hostname = cfg.server.hostname;
+  if (cfg.server?.logs !== undefined) server.logs = cfg.server.logs;
 
   return { root: options.root, server, api, web, db, auth, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
 }
