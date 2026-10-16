@@ -11,3 +11,7 @@ dist/
 
 # Prisma
 generated/
+
+# Local SQLite databases
+*.db
+*.db-journal

@@ -10,7 +10,7 @@
 <ul>
   {#each posts as post (post.id)}
     <li>
-      <a href="/posts/{post.id}">{post.title}</a>
+      <a href="/posts/{post.slug}">{post.title}</a>
       <small>{post.createdAt.toLocaleDateString("fr-FR")}</small>
     </li>
   {/each}

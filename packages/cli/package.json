@@ -1,0 +1,14 @@
+{
+  "name": "@forge/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./db-url": "./src/db-url.ts"
+  },
+  "dependencies": {
+    "@forge/core": "workspace:*",
+    "@forge/models": "workspace:*"
+  }
+}

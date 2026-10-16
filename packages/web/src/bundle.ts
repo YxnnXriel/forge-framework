@@ -46,7 +46,8 @@ export async function buildClient(manifest: WebManifest, options: { root: string
     format: "esm",
     splitting: true,
     minify: !options.dev,
-    sourcemap: options.dev ? "inline" : "none",
+    // Linked (not inline) in dev: faster builds, maps fetched only when devtools are open.
+    sourcemap: options.dev ? "linked" : "none",
     naming: { entry: "[name]-[hash].[ext]", chunk: "[name]-[hash].[ext]", asset: "[name]-[hash].[ext]" },
     publicPath: ASSETS_PREFIX,
     metafile: true,

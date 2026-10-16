@@ -19,17 +19,19 @@
       "@types/bun": "1.4.3",
       "devalue": "6.0.3",
       "playwright-core": "1.64.1",
-      "svelte-check": "4.7.6"
+      "svelte-check": "4.7.6",
+      "prisma-adapter-bun-sqlite": "0.8.0"
     }
   },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p examples/api-only && tsc --noEmit -p examples/full-stack && tsc --noEmit -p examples/web-only",
     "check:svelte": "bun run --filter 'example-full-stack' --filter 'example-web-only' check",
-    "check": "bun test && bun run typecheck && bun run check:svelte",
+    "check": "bun run db:generate && bun test && bun run typecheck && bun run check:svelte",
     "example:api": "bun run --filter example-api-only dev",
     "example:full": "bun run --filter example-full-stack dev",
-    "example:web": "bun run --filter example-web-only dev"
+    "example:web": "bun run --filter example-web-only dev",
+    "db:generate": "bun run --filter example-full-stack db:generate"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

@@ -1,0 +1,12 @@
+// Prisma entry point, created by Forge. You own this file.
+// Models declared in src/apps/*/models.ts are generated into forge.generated.prisma;
+// models you write by hand go in other .prisma files of this folder.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@forge/models",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "@forge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "prisma": "catalog:",
+    "@prisma/client": "catalog:"
+  }
+}

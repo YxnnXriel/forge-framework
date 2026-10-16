@@ -5,10 +5,8 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { createApp } from "forge";
 import { chromium, type Browser, type Page } from "playwright-core";
-import { createStore, demoUser } from "../src/deps.ts";
+import { dbReady, freshApp } from "../test/setup.ts";
 
 // Browser tests need a Chromium: FORGE_CHROMIUM=/path/to/chromium, or one
 // installed for playwright-core. Skipped (with a notice) when none is found.
@@ -16,17 +14,13 @@ const executablePath = Bun.env.FORGE_CHROMIUM ?? chromium.executablePath();
 const hasBrowser = Boolean(executablePath && existsSync(executablePath));
 if (!hasBrowser) console.warn("[e2e] Chromium not found, browser tests skipped. Set FORGE_CHROMIUM=/path/to/chromium.");
 
-describe.skipIf(!hasBrowser)("browser", () => {
+describe.skipIf(!hasBrowser || !dbReady)("browser", () => {
   let browser: Browser;
   let server: ReturnType<typeof Bun.serve>;
   let base: string;
 
   beforeAll(async () => {
-    const { app } = await createApp({
-      root: join(import.meta.dir, ".."),
-      deps: { store: createStore(), user: null },
-      requestDeps: demoUser,
-    });
+    const { app } = await freshApp();
     server = Bun.serve({ port: 0, fetch: app.fetch });
     base = server.url.href.replace(/\/$/, "");
       browser = await chromium.launch({ executablePath });
@@ -67,7 +61,7 @@ describe.skipIf(!hasBrowser)("browser", () => {
 
   describe("SSR + hydration", () => {
     test("hydration reuses SSR data: no remote call, Date preserved, page interactive", async () => {
-      const { page, rpc, errors } = await open("/posts/1");
+      const { page, rpc, errors } = await open("/posts/bienvenue-sur-forge");
       expect(await text(page, "h1")).toBe("Bienvenue sur Forge");
       expect(rpc).toEqual([]);
       expect(await page.locator("time").getAttribute("datetime")).toBe("2026-10-01T10:00:00.000Z");
@@ -88,10 +82,10 @@ describe.skipIf(!hasBrowser)("browser", () => {
 
       await page.click('nav a[href="/posts"]');
       await until(() => text(page, "h1"), "Articles");
-      await page.click('a[href="/posts/2"]');
+      await page.click('a[href="/posts/layouts-imbriques"]');
       await until(() => text(page, "h1"), "Layouts imbriqués");
 
-      expect(page.url()).toBe(`${base}/posts/2`);
+      expect(page.url()).toBe(`${base}/posts/layouts-imbriques`);
       expect(documents).toEqual(["/"]); // only the first load hit the server for HTML
       expect(rpc).toEqual(["posts.list", "posts.detail"]);
       expect(await text(page, "button.layout-counter")).toBe("layout : 2");
@@ -114,12 +108,12 @@ describe.skipIf(!hasBrowser)("browser", () => {
       const { page } = await open("/posts");
       await page.evaluate(() => {
         const a = document.createElement("a");
-        a.href = "/posts/999";
+        a.href = "/posts/nope";
         a.id = "missing";
         a.textContent = "missing";
         document.body.append(a);
       });
-      const response = page.waitForResponse((r) => r.url().endsWith("/posts/999") && r.request().resourceType() === "document");
+      const response = page.waitForResponse((r) => r.url().endsWith("/posts/nope") && r.request().resourceType() === "document");
       await page.click("#missing");
       expect((await response).status()).toBe(404);
       await until(() => text(page, "h1"), "404");
@@ -136,7 +130,7 @@ describe.skipIf(!hasBrowser)("browser", () => {
 
       await page.context().addCookies([{ name: "demo_user", value: "ariel", url: base }]);
       await page.click("button[type=submit]");
-      await until(() => text(page, ".message"), "Créé : #4");
+      await until(() => text(page, ".message"), "Créé : depuis-le-navigateur");
       await page.close();
     });
   });

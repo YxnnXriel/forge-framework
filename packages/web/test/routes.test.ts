@@ -70,3 +70,26 @@ test("browser and server agree on the RPC protocol constants", () => {
   expect(RPC_PREFIX).toBe(SERVER_PREFIX);
   expect(RPC_CONTENT_TYPE).toBe(SERVER_CT);
 });
+
+describe("matchRoute (segment tree)", () => {
+  const r = (id: string) => ({
+    id,
+    segments: id.split("/").filter(Boolean).map((s) =>
+      s.startsWith("[") ? ({ kind: "param", name: s.slice(1, -1) } as const) : ({ kind: "static", value: s } as const),
+    ),
+  });
+
+  test("backtracks from a static branch to a param branch", () => {
+    const routes = [r("/posts/latest/edit"), r("/posts/[id]"), r("/posts/[slug]/comments")];
+    expect(matchRoute(routes, "/posts/latest")).toMatchObject({ route: { id: "/posts/[id]" }, params: { id: "latest" } });
+    expect(matchRoute(routes, "/posts/latest/edit")?.route.id).toBe("/posts/latest/edit");
+    expect(matchRoute(routes, "/posts/hello/comments")).toMatchObject({ params: { slug: "hello" } });
+    expect(matchRoute(routes, "/")).toBeNull();
+  });
+
+  test("root route and nested params", () => {
+    const routes = [r("/"), r("/[org]/[repo]")];
+    expect(matchRoute(routes, "/")?.route.id).toBe("/");
+    expect(matchRoute(routes, "/a/b")?.params).toEqual({ org: "a", repo: "b" });
+  });
+});

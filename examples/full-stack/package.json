@@ -7,16 +7,22 @@
     "start": "NODE_ENV=production bun src/main.ts",
     "test": "bun test test/",
     "test:e2e": "bun test e2e/",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "db:generate": "forge db generate",
+    "db:migrate": "forge db migrate",
+    "seed": "bun src/seed.ts"
   },
   "dependencies": {
     "forge": "workspace:*",
-    "svelte": "catalog:"
+    "svelte": "catalog:",
+    "@prisma/client": "catalog:",
+    "prisma-adapter-bun-sqlite": "catalog:"
   },
   "devDependencies": {
     "playwright-core": "catalog:",
     "svelte-check": "catalog:",
     "typescript": "catalog:",
-    "devalue": "catalog:"
+    "devalue": "catalog:",
+    "prisma": "catalog:"
   }
 }

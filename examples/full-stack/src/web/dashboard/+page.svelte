@@ -9,7 +9,7 @@
     event.preventDefault();
     try {
       const post = await forge.posts.create({ title });
-      message = `Créé : #${post.id}`;
+      message = `Créé : ${post.slug}`;
       title = "";
     } catch (e) {
       message = e instanceof RemoteError ? `Erreur ${e.status} : ${e.message}` : "Erreur inattendue";

@@ -11,7 +11,7 @@ export { scanRoutes, matchRoute, type WebRoute, type WebManifest } from "./route
 export { buildClient, clientEntry, type ClientAssets } from "./bundle.ts";
 export { registerServerPlugin, clientPlugin } from "./compile.ts";
 export { renderPage } from "./ssr.ts";
-export { writeTypes, type RemoteApi } from "./types.ts";
+export type { RemoteApi } from "./types.ts";
 export { pageScope, type PageState } from "./server/page.ts";
 export * as constants from "./shared/constants.ts";
 

@@ -10,7 +10,9 @@
     "./web": "./src/web.ts",
     "./ambient": {
       "types": "./ambient.d.ts"
-    }
+    },
+    "./models": "./src/models.ts",
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "@forge/core": "workspace:*",
@@ -18,6 +20,11 @@
     "zod": "catalog:",
     "@forge/server": "workspace:*",
     "@forge/web": "workspace:*",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@forge/models": "workspace:*",
+    "@forge/cli": "workspace:*"
+  },
+  "bin": {
+    "forge": "./src/cli.ts"
   }
 }

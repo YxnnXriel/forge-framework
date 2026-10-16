@@ -30,6 +30,11 @@ export interface ApiConfig {
   urls?: string;
 }
 
+export interface DbConfig {
+  /** Database engine. The connection string is read from `DATABASE_URL`. */
+  provider: "postgresql" | "sqlite";
+}
+
 export interface WebConfig {
   /** Directory scanned for `+page.svelte` / `+layout.svelte`. Default: `src/web`. */
   dir?: string;
@@ -46,6 +51,8 @@ export interface ForgeConfig {
   server?: ServerConfig;
   api?: ApiConfig | false;
   web?: WebConfig | false;
+  /** Prisma integration (models declared in each app's models.ts). */
+  db?: DbConfig | false;
   env?: EnvConfig;
 }
 
@@ -55,6 +62,7 @@ export interface ResolvedConfig {
   server: ServerConfig;
   api: Required<ApiConfig> | null;
   web: Required<WebConfig> | null;
+  db: DbConfig | null;
   /** Domain apps (`src/apps/<name>/`), source of remote functions. */
   apps: string;
   env: { private: EnvShape; public: EnvShape };
@@ -89,6 +97,7 @@ const configSchema = z.strictObject({
   web: z
     .union([z.literal(false), z.strictObject({ dir: z.string().min(1).optional(), lang: z.string().min(1).optional() })])
     .optional(),
+  db: z.union([z.literal(false), z.strictObject({ provider: z.enum(["postgresql", "sqlite"]) })]).optional(),
   env: z
     .strictObject({
       private: envShapeSchema.optional(),
@@ -97,11 +106,24 @@ const configSchema = z.strictObject({
     .optional(),
 });
 
+type RawIssue = { path: PropertyKey[]; message: string; code?: string; errors?: RawIssue[][] };
+
+/**
+ * Flattens issues. For `false | { ... }` options, Zod reports a vague union
+ * error; the branch that got furthest (the object) explains the real problem.
+ */
+function flatten(issue: RawIssue, base: PropertyKey[] = []): ForgeIssue[] {
+  const path = [...base, ...issue.path];
+  if (issue.code === "invalid_union" && issue.errors?.length) {
+    const depth = (branch: RawIssue[]) => Math.max(...branch.map((i) => i.path.length));
+    const best = [...issue.errors].sort((a, b) => depth(b) - depth(a))[0]!;
+    if (depth(best) > 0) return best.flatMap((i) => flatten(i, path));
+  }
+  return [{ path: path.map(String).join("."), message: issue.message }];
+}
+
 function toIssues(error: z.ZodError): ForgeIssue[] {
-  return error.issues.map((issue) => ({
-    path: issue.path.map(String).join("."),
-    message: issue.message,
-  }));
+  return error.issues.flatMap((issue) => flatten(issue as unknown as RawIssue));
 }
 
 function abs(root: string, p: string): string {
@@ -125,6 +147,8 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
       ? null
       : { dir: abs(options.root, cfg.web.dir ?? "src/web"), lang: cfg.web.lang ?? "en" };
 
+  const db = cfg.db === false || cfg.db === undefined ? null : { provider: cfg.db.provider };
+
   if (!api && !web) {
     issues.push({ path: "", message: "no module enabled: declare at least `api` or `web`" });
   }
@@ -143,7 +167,7 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
   if (cfg.server?.port !== undefined) server.port = cfg.server.port;
   if (cfg.server?.hostname !== undefined) server.hostname = cfg.server.hostname;
 
-  return { root: options.root, server, api, web, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
+  return { root: options.root, server, api, web, db, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
 }
 
 export const CONFIG_FILENAME = "forge.config.ts";

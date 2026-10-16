@@ -38,6 +38,12 @@ describe("resolveConfig", () => {
     expect(c.server).toEqual({ port: 4000 });
   });
 
+  test("db is opt-in and validated", () => {
+    expect(resolve({ api: {} }).db).toBeNull();
+    expect(resolve({ api: {}, db: { provider: "sqlite" } }).db).toEqual({ provider: "sqlite" });
+    expect(issuesOf(() => resolve({ api: {}, db: { provider: "mongo" } }))[0]?.path).toBe("db.provider");
+  });
+
   test("server defaults are left to Bun", () => {
     expect(resolve({ api: {} }).server).toEqual({});
   });

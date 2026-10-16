@@ -9,6 +9,7 @@ export {
   type ServerConfig,
   type ApiConfig,
   type WebConfig,
+  type DbConfig,
   type EnvConfig,
   type EnvShape,
 } from "./config.ts";
