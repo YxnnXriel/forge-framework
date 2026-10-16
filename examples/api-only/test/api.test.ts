@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createApp } from "forge/server";
+import { createApp } from "forge";
 import { join } from "node:path";
 import { posts } from "../src/apps/posts/repository.ts";
 import { PostStore } from "../src/store.ts";

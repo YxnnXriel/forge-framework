@@ -6,12 +6,18 @@
   "exports": {
     ".": "./src/index.ts",
     "./env": "./src/env.ts",
-    "./server": "./src/server.ts"
+    "./server": "./src/server.ts",
+    "./web": "./src/web.ts",
+    "./ambient": {
+      "types": "./ambient.d.ts"
+    }
   },
   "dependencies": {
     "@forge/core": "workspace:*",
     "@forge/env": "workspace:*",
     "zod": "catalog:",
-    "@forge/server": "workspace:*"
+    "@forge/server": "workspace:*",
+    "@forge/web": "workspace:*",
+    "hono": "catalog:"
   }
 }

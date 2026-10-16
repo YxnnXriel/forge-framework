@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { currentDeps, type ForgeDeps } from "./deps.ts";
-import { ValidationError } from "./errors.ts";
+import { HttpError, ValidationError } from "./errors.ts";
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type Schema = z.ZodType;
@@ -51,8 +51,11 @@ export interface ViewMeta {
   [key: string]: unknown;
 }
 
+/** Server-side rule evaluated before every remote call (from the browser or from SSR). */
+export type AccessRule<I, D> = (ctx: DepsOf<D> & { input: I }) => boolean | Promise<boolean>;
+
 /** Options of `defineView()`: the structured form of an endpoint handler. */
-export interface ViewOptions<S, O, D, I, R> {
+export interface ViewOptions<S, O, D, I, R, Rm extends boolean = false> {
   /** Validates params + query + body (merged). */
   input?: S;
   /**
@@ -65,6 +68,13 @@ export interface ViewOptions<S, O, D, I, R> {
   meta?: ViewMeta;
   /** Success status. Default 200 (204 when the handler returns undefined). */
   status?: ContentfulStatusCode;
+  /**
+   * Opt-in: makes the function callable from Svelte through `forge:router`.
+   * Nothing is remote by default.
+   */
+  remote?: Rm;
+  /** Checked server-side on every remote call; `false` -> 403. Not applied to in-process calls. */
+  access?: AccessRule<I, D>;
   /**
    * Kept non-conditional on purpose: editors compute completions for `input.`
    * from this signature, and a conditional type here would hide them.
@@ -85,8 +95,10 @@ type Call<CallIn, Out> = {} extends CallIn
   ? (input?: CallIn, deps?: Partial<ForgeDeps>) => Promise<Out>
   : (input: CallIn, deps?: Partial<ForgeDeps>) => Promise<Out>;
 
-export type View<CallIn = any, In = any, Out = any> = Call<CallIn, Out> & {
+export type View<CallIn = any, In = any, Out = any, Rm extends boolean = boolean> = Call<CallIn, Out> & {
   readonly kind: "view";
+  readonly remote: Rm;
+  readonly access: AccessRule<In, any> | undefined;
   readonly input: Schema | undefined;
   readonly output: Schema | undefined;
   readonly deps: readonly string[] | undefined;
@@ -95,11 +107,14 @@ export type View<CallIn = any, In = any, Out = any> = Call<CallIn, Out> & {
   readonly handler: (ctx: HandlerContext<In, any>) => unknown;
 };
 
-export type Endpoint<M extends Method = Method, P extends string = string, CallIn = any, In = any, Out = any> = View<
-  CallIn,
-  In,
-  Out
-> & {
+export type Endpoint<
+  M extends Method = Method,
+  P extends string = string,
+  CallIn = any,
+  In = any,
+  Out = any,
+  Rm extends boolean = boolean,
+> = View<CallIn, In, Out, Rm> & {
   readonly method: M;
   readonly path: P;
 };
@@ -114,7 +129,12 @@ function issues(error: z.ZodError) {
 export async function invoke(
   view: View,
   raw: unknown,
-  options: { deps?: Partial<ForgeDeps> | undefined; http?: Context | undefined } = {},
+  options: {
+    deps?: Partial<ForgeDeps> | undefined;
+    http?: Context | undefined;
+    /** Remote call: evaluates the view's `access` rule first. */
+    checkAccess?: boolean;
+  } = {},
 ): Promise<unknown> {
   let input: unknown = raw ?? {};
   if (view.input) {
@@ -124,6 +144,10 @@ export async function invoke(
   }
 
   const available: Record<string, unknown> = { ...currentDeps(), ...options.deps };
+  if (options.checkAccess && view.access) {
+    const allowed = await view.access({ ...available, input } as never);
+    if (!allowed) throw new HttpError(403, "Forbidden");
+  }
   let deps: Record<string, unknown> = available;
   if (view.deps) {
     deps = {};
@@ -151,18 +175,37 @@ export async function invoke(
   return out.data;
 }
 
-type AnyDef = Handler<any, any, any> | ViewOptions<any, any, any, any, any> | View;
+type AnyDef = Handler<any, any, any> | ViewOptions<any, any, any, any, any, boolean> | View;
 
 function normalize(def: AnyDef) {
   if (typeof def === "function" && (def as View).kind === "view") {
     const v = def as View;
-    return { input: v.input, output: v.output, deps: v.deps, meta: v.meta, status: v.status, handler: v.handler };
+    const { input, output, deps, meta, status, remote, access, handler } = v;
+    return { input, output, deps, meta, status, remote, access, handler };
   }
   if (typeof def === "function") {
-    return { input: undefined, output: undefined, deps: undefined, meta: undefined, status: undefined, handler: def };
+    return {
+      input: undefined,
+      output: undefined,
+      deps: undefined,
+      meta: undefined,
+      status: undefined,
+      remote: false,
+      access: undefined,
+      handler: def,
+    };
   }
-  const o = def as ViewOptions<Schema | undefined, Schema | undefined, readonly string[] | undefined, any, any>;
-  return { input: o.input, output: o.output, deps: o.deps, meta: o.meta, status: o.status, handler: o.handler };
+  const o = def as ViewOptions<Schema | undefined, Schema | undefined, readonly string[] | undefined, any, any, boolean>;
+  return {
+    input: o.input,
+    output: o.output,
+    deps: o.deps,
+    meta: o.meta,
+    status: o.status,
+    remote: o.remote === true,
+    access: o.access,
+    handler: o.handler,
+  };
 }
 
 function makeView(def: AnyDef, route?: { method: Method; path: string }) {
@@ -186,7 +229,10 @@ export function defineView<
   const O extends Schema | undefined = undefined,
   const D extends readonly DepName[] | undefined = undefined,
   R extends ReturnFor<O> = ReturnFor<O>,
->(options: ViewOptions<S, O, D, InOf<S, string>, R>): View<CallInOf<S, string>, InOf<S, string>, OutOf<O, R>> {
+  const Rm extends boolean = false,
+>(
+  options: ViewOptions<S, O, D, InOf<S, string>, R, Rm>,
+): View<CallInOf<S, string>, InOf<S, string>, OutOf<O, R>, Rm> {
   return makeView(options as AnyDef);
 }
 
@@ -203,12 +249,19 @@ export interface RouteDefinition<M extends Method> {
     const O extends Schema | undefined = undefined,
     const D extends readonly DepName[] | undefined = undefined,
     R extends ReturnFor<O> = ReturnFor<O>,
+    const Rm extends boolean = false,
   >(
     path: P,
-    options: ViewOptions<S, O, D, InOf<S, P>, R>,
-  ): Endpoint<M, P, CallInOf<S, P>, InOf<S, P>, OutOf<O, R>>;
-  <const P extends string, R>(path: P, handler: Handler<RawInput<P>, R>): Endpoint<M, P, RawInput<P>, RawInput<P>, Awaited<R>>;
-  <const P extends string, CallIn, In, Out>(path: P, view: View<CallIn, In, Out>): Endpoint<M, P, CallIn, In, Out>;
+    options: ViewOptions<S, O, D, InOf<S, P>, R, Rm>,
+  ): Endpoint<M, P, CallInOf<S, P>, InOf<S, P>, OutOf<O, R>, Rm>;
+  <const P extends string, R>(
+    path: P,
+    handler: Handler<RawInput<P>, R>,
+  ): Endpoint<M, P, RawInput<P>, RawInput<P>, Awaited<R>, false>;
+  <const P extends string, CallIn, In, Out, Rm extends boolean>(
+    path: P,
+    view: View<CallIn, In, Out, Rm>,
+  ): Endpoint<M, P, CallIn, In, Out, Rm>;
 }
 
 function verb<M extends Method>(method: M): RouteDefinition<M> {

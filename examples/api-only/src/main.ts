@@ -1,4 +1,4 @@
-import { startApp } from "forge/server";
+import { startApp } from "forge";
 import { PostStore } from "./store.ts";
 
 const store = new PostStore([

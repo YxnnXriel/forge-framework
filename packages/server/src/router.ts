@@ -1,8 +1,9 @@
 import { ForgeError } from "@forge/core";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { currentDeps, provideDeps, runWithDeps, type ForgeDeps } from "./deps.ts";
-import { HttpError, ValidationError } from "./errors.ts";
+import { HttpError, Redirect, ValidationError } from "./errors.ts";
 import { readInput } from "./input.ts";
+import { mountRemote } from "./remote.ts";
 import { endpointsOf, isRepository, type Repository } from "./repository.ts";
 import {
   del,
@@ -93,9 +94,10 @@ interface RouteMethod {
     const O extends Schema | undefined = undefined,
     const D extends readonly DepName[] | undefined = undefined,
     R extends ReturnFor<O> = ReturnFor<O>,
+    const Rm extends boolean = false,
   >(
     path: P,
-    options: ViewOptions<S, O, D, InOf<S, P>, R>,
+    options: ViewOptions<S, O, D, InOf<S, P>, R, Rm>,
   ): Router;
   <const P extends string, R>(path: P, handler: Handler<RawInput<P>, R>): Router;
   (path: string, view: View): Router;
@@ -145,6 +147,8 @@ export interface ServerOptions {
   requestDeps?: (c: Context) => Partial<ForgeDeps> | Promise<Partial<ForgeDeps>>;
   /** Called for unexpected errors (default: console.error). Never sent to the client. */
   onUnexpectedError?: (error: unknown, c: Context) => void;
+  /** Mounts `POST /__forge/rpc/:name` for functions marked `remote: true`. */
+  remote?: boolean;
 }
 
 /** Assembles the application: dependency scope, routes from `urls`, error handling. */
@@ -158,9 +162,11 @@ export function createServer(options: ServerOptions): Hono {
   });
 
   for (const [prefix, target] of options.urls.entries) app.route(prefix, toHono(target));
+  if (options.remote) mountRemote(app, (e) => (options.onUnexpectedError ?? console.error)(e, undefined as never));
 
   app.notFound((c) => c.json({ error: "Not Found" }, 404));
   app.onError((err, c) => {
+    if (err instanceof Redirect) return c.redirect(err.location, err.status);
     if (err instanceof ValidationError) return c.json({ error: err.message, issues: err.issues }, 400);
     if (err instanceof HttpError) {
       const body = err.details === undefined ? { error: err.message } : { error: err.message, details: err.details };

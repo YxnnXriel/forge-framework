@@ -33,6 +33,8 @@ export interface ApiConfig {
 export interface WebConfig {
   /** Directory scanned for `+page.svelte` / `+layout.svelte`. Default: `src/web`. */
   dir?: string;
+  /** `<html lang>`. Default: `en`. */
+  lang?: string;
 }
 
 /**
@@ -53,6 +55,8 @@ export interface ResolvedConfig {
   server: ServerConfig;
   api: Required<ApiConfig> | null;
   web: Required<WebConfig> | null;
+  /** Domain apps (`src/apps/<name>/`), source of remote functions. */
+  apps: string;
   env: { private: EnvShape; public: EnvShape };
 }
 
@@ -82,7 +86,9 @@ const configSchema = z.strictObject({
     })
     .optional(),
   api: z.union([z.literal(false), z.strictObject({ urls: z.string().min(1).optional() })]).optional(),
-  web: z.union([z.literal(false), z.strictObject({ dir: z.string().min(1).optional() })]).optional(),
+  web: z
+    .union([z.literal(false), z.strictObject({ dir: z.string().min(1).optional(), lang: z.string().min(1).optional() })])
+    .optional(),
   env: z
     .strictObject({
       private: envShapeSchema.optional(),
@@ -114,7 +120,10 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
   const issues: ForgeIssue[] = [];
 
   const api = cfg.api === false || cfg.api === undefined ? null : { urls: abs(options.root, cfg.api.urls ?? "src/urls.ts") };
-  const web = cfg.web === false || cfg.web === undefined ? null : { dir: abs(options.root, cfg.web.dir ?? "src/web") };
+  const web =
+    cfg.web === false || cfg.web === undefined
+      ? null
+      : { dir: abs(options.root, cfg.web.dir ?? "src/web"), lang: cfg.web.lang ?? "en" };
 
   if (!api && !web) {
     issues.push({ path: "", message: "no module enabled: declare at least `api` or `web`" });
@@ -134,7 +143,7 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
   if (cfg.server?.port !== undefined) server.port = cfg.server.port;
   if (cfg.server?.hostname !== undefined) server.hostname = cfg.server.hostname;
 
-  return { root: options.root, server, api, web, env: { private: priv, public: pub } };
+  return { root: options.root, server, api, web, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
 }
 
 export const CONFIG_FILENAME = "forge.config.ts";

@@ -29,3 +29,23 @@ export class ValidationError extends ForgeError {
     this.issues = issues;
   }
 }
+
+export type RedirectStatus = 301 | 302 | 303 | 307 | 308;
+
+/** Thrown by `redirect()`. Turned into a 3xx response over HTTP, a client navigation in the browser. */
+export class Redirect extends ForgeError {
+  override readonly name = "Redirect";
+  readonly status: RedirectStatus;
+  readonly location: string;
+
+  constructor(status: RedirectStatus, location: string) {
+    super("FORGE_REDIRECT", `Redirect to ${location}`);
+    this.status = status;
+    this.location = location;
+  }
+}
+
+/** `redirect(303, "/login")`: usable in handlers, access rules and pages. */
+export function redirect(status: RedirectStatus, location: string): never {
+  throw new Redirect(status, location);
+}

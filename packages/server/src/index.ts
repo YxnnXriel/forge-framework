@@ -1,4 +1,4 @@
-export { HttpError, ValidationError, error } from "./errors.ts";
+export { HttpError, ValidationError, Redirect, error, redirect, type RedirectStatus } from "./errors.ts";
 export { provideDeps, runWithDeps, currentDeps, type ForgeDeps } from "./deps.ts";
 export {
   defineView,
@@ -17,6 +17,9 @@ export {
   type HandlerContext,
   type ViewOptions,
   type ViewMeta,
+  type AccessRule,
+  type InOf,
+  type Schema,
   type DepName,
   type DepsOf,
   type RouteDefinition,
@@ -27,4 +30,16 @@ export { defineRepository, isRepository, endpointsOf, type Repository, type Verb
 export { readInput } from "./input.ts";
 export { Router, createRouter, defineUrls, createServer, serve, type Urls, type UrlTarget, type ServerOptions } from "./router.ts";
 export { isUrls } from "./router.ts";
-export { createApp, startApp, type App, type AppOptions } from "./app.ts";
+export {
+  registerRemotes,
+  discoverRemotes,
+  clearRemotes,
+  listRemotes,
+  callRemote,
+  mountRemote,
+  RPC_PREFIX,
+  RPC_CONTENT_TYPE,
+  type DiscoveredApp,
+  type RpcReply,
+} from "./remote.ts";
+export type { Context } from "hono";

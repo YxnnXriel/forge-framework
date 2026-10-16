@@ -27,7 +27,7 @@ describe("resolveConfig", () => {
 
   test("web-only project needs nothing about api", () => {
     const c = resolve({ web: { dir: "app" } });
-    expect(c.web).toEqual({ dir: "/project/app" });
+    expect(c.web).toEqual({ dir: "/project/app", lang: "en" });
     expect(c.api).toBeNull();
   });
 

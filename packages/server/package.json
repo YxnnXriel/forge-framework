@@ -10,7 +10,7 @@
     "@forge/core": "workspace:*",
     "hono": "catalog:",
     "zod": "catalog:",
-    "@forge/env": "workspace:*"
+    "devalue": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:"

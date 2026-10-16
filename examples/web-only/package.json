@@ -1,0 +1,21 @@
+{
+  "name": "example-web-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "NODE_ENV=production bun src/main.ts",
+    "test": "bun test test/",
+    "test:e2e": "bun test e2e/",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "forge": "workspace:*",
+    "svelte": "catalog:"
+  },
+  "devDependencies": {
+    "playwright-core": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:"
+  }
+}

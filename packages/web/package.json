@@ -1,0 +1,19 @@
+{
+  "name": "@forge/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./ambient": "./src/ambient.d.ts",
+    "./errors": "./src/shared/errors.ts"
+  },
+  "dependencies": {
+    "@forge/core": "workspace:*",
+    "@forge/server": "workspace:*",
+    "devalue": "catalog:",
+    "hono": "catalog:",
+    "svelte": "catalog:"
+  }
+}
