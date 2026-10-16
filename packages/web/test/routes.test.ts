@@ -93,3 +93,15 @@ describe("matchRoute (segment tree)", () => {
     expect(matchRoute(routes, "/a/b")?.params).toEqual({ org: "a", repo: "b" });
   });
 });
+
+describe("server matcher (Rust engine when built, TypeScript otherwise)", () => {
+  test("agrees with the TypeScript router on every case", async () => {
+    const { createMatcher } = await import("../src/server/matcher.ts");
+    const dir = await project(["+page.svelte", "posts/[id]/+page.svelte", "posts/latest/+page.svelte", "[org]/[repo]/+page.svelte"]);
+    const m = await scanRoutes(dir);
+    const server = createMatcher(m.routes);
+    for (const p of ["/", "/posts/latest", "/posts/42", "/posts/a%20b", "/a/b", "/a/b/c", "/posts/%E0%A4%A", "/é/x", "//posts//42"]) {
+      expect(server(p)).toEqual(matchRoute(m.routes, p));
+    }
+  });
+});

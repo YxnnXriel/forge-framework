@@ -118,6 +118,16 @@ describe("defineView", () => {
     expect(await posts.list(undefined, { db: fakeDb([]) })).toEqual([]);
   });
 
+  test("thenables (PrismaPromise) are awaited like promises, over HTTP too", async () => {
+    const lazy = <T,>(value: T) => ({ then: (ok: (v: T) => unknown) => ok(value) });
+    const r = defineRepository(({ get }) => ({
+      list: get("/", { output: z.array(z.number()), handler: () => lazy([1, 2]) as never }),
+    }));
+    const a = createServer({ urls: defineUrls({ "/t": r }) });
+    expect(await (await a.request("/t")).json()).toEqual([1, 2]);
+    expect(await r.list()).toEqual([1, 2]);
+  });
+
   test("http context is absent on internal calls", async () => {
     app();
     const probe = defineView({ handler: ({ http }) => http === undefined });

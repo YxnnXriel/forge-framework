@@ -14,6 +14,7 @@
     "@forge/server": "workspace:*",
     "devalue": "catalog:",
     "hono": "catalog:",
-    "svelte": "catalog:"
+    "svelte": "catalog:",
+    "@forge/rust-engine": "workspace:*"
   }
 }

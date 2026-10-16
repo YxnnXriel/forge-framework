@@ -1,0 +1,12 @@
+{
+  "name": "@forge/rust-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "cargo build --release --manifest-path native/Cargo.toml"
+  }
+}

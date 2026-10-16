@@ -1,0 +1,16 @@
+{
+  "name": "forge-bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "bun run.ts"
+  },
+  "dependencies": {
+    "@forge/rust-engine": "workspace:*",
+    "@forge/server": "workspace:*",
+    "@forge/web": "workspace:*",
+    "elysia": "1.4.30",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  }
+}

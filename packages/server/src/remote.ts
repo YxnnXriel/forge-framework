@@ -2,6 +2,7 @@ import { basename, dirname, join } from "node:path";
 import { ForgeError } from "@forge/core";
 import * as devalue from "devalue";
 import type { Context, Hono } from "hono";
+import { inRequestScope } from "./deps.ts";
 import { HttpError, Redirect, ValidationError } from "./errors.ts";
 import { endpointsOf, isRepository, type Repository } from "./repository.ts";
 import { invoke, type Endpoint } from "./view.ts";
@@ -117,7 +118,7 @@ export function mountRemote(app: Hono<any, any, any>, onUnexpectedError: (e: unk
       return reply(c, { ok: false, status: 400, error: "Malformed payload" }, 400);
     }
     try {
-      const data = await callRemote(c.req.param("name"), input, c);
+      const data = await inRequestScope(c, () => callRemote(c.req.param("name"), input, c));
       return reply(c, { ok: true, data }, 200);
     } catch (err) {
       if (err instanceof Redirect) return reply(c, { ok: false, redirect: err.location, status: err.status }, 200);

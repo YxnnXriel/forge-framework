@@ -1,5 +1,5 @@
 export { HttpError, ValidationError, Redirect, error, redirect, type RedirectStatus } from "./errors.ts";
-export { provideDeps, runWithDeps, currentDeps, type ForgeDeps } from "./deps.ts";
+export { provideDeps, provideRequestDeps, runWithDeps, currentDeps, inRequestScope, type ForgeDeps } from "./deps.ts";
 export {
   defineView,
   get,
@@ -8,6 +8,8 @@ export {
   patch,
   del,
   invoke,
+  run,
+  isThenable,
   isView,
   isEndpoint,
   type View,

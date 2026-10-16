@@ -2,15 +2,17 @@ import { stat } from "node:fs/promises";
 import { join, normalize, sep } from "node:path";
 import type { Hono } from "hono";
 import { buildClient, type ClientAssets } from "./bundle.ts";
-import { registerServerPlugin } from "./compile.ts";
+import { prepareCompileCache, registerServerPlugin } from "./compile.ts";
 import { scanRoutes, type WebManifest } from "./routes.ts";
 import { ASSETS_PREFIX } from "./shared/constants.ts";
+import { createMatcher } from "./server/matcher.ts";
 import { renderPage } from "./ssr.ts";
 
 export { scanRoutes, matchRoute, type WebRoute, type WebManifest } from "./routes.ts";
 export { buildClient, clientEntry, type ClientAssets } from "./bundle.ts";
-export { registerServerPlugin, clientPlugin } from "./compile.ts";
+export { registerServerPlugin, clientPlugin, prepareCompileCache } from "./compile.ts";
 export { renderPage } from "./ssr.ts";
+export { createMatcher, type Matcher } from "./server/matcher.ts";
 export type { RemoteApi } from "./types.ts";
 export { pageScope, type PageState } from "./server/page.ts";
 export * as constants from "./shared/constants.ts";
@@ -35,11 +37,13 @@ export interface Web {
 
 /** Sets up the web layer: Svelte compilation, page discovery, browser bundle, SSR. */
 export async function createWeb(options: WebOptions): Promise<Web> {
+  await prepareCompileCache(options.root, options.dir);
   registerServerPlugin(options.dev);
   const manifest = await scanRoutes(options.dir);
   const assets = await buildClient(manifest, { root: options.root, dev: options.dev });
   const publicDir = normalize(options.publicDir ?? join(options.root, "public"));
   const onUnexpectedError = options.onUnexpectedError ?? ((e: unknown) => console.error(e));
+  const match = createMatcher(manifest.routes);
 
   return {
     manifest,
@@ -71,7 +75,7 @@ export async function createWeb(options: WebOptions): Promise<Web> {
       });
 
       app.get("*", (c) =>
-        renderPage(c, { manifest, assets, lang: options.lang ?? "en", onUnexpectedError }),
+        renderPage(c, { manifest, match, assets, lang: options.lang ?? "en", onUnexpectedError }),
       );
     },
   };

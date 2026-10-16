@@ -1,15 +1,17 @@
-import { HttpError, Redirect, ValidationError } from "@forge/server";
+import { HttpError, Redirect, ValidationError, inRequestScope } from "@forge/server";
 import type { Context } from "hono";
 import type { Component } from "svelte";
 import { render } from "svelte/server";
 import type { ClientAssets } from "./bundle.ts";
 import { runtimeFiles } from "./compile.ts";
-import { matchRoute, type WebManifest, type WebRoute } from "./routes.ts";
+import type { WebManifest, WebRoute } from "./routes.ts";
+import type { Matcher } from "./server/matcher.ts";
 import { pageScope, type PageState } from "./server/page.ts";
 import { ROOT_ID, STATE_ID } from "./shared/constants.ts";
 
 export interface SsrOptions {
   manifest: WebManifest;
+  match: Matcher<WebRoute>;
   assets: ClientAssets;
   lang: string;
   onUnexpectedError: (error: unknown) => void;
@@ -51,12 +53,12 @@ ${parts.head}
 async function renderTree(Root: Component<any>, components: Component<any>[], state: PageState) {
   // `render()` is lazy: it must be awaited inside the scope, or `page` and
   // remote calls would lose the request state.
-  return pageScope.run(state, async () => {
+  return inRequestScope(state.http!, () => pageScope.run(state, async () => {
     const { head, body } = await render(Root, {
       props: { state: { components, key: state.url.pathname + state.url.search } },
     });
     return { head, body };
-  });
+  }));
 }
 
 /** Renders the error page, inside the root layout when it renders, alone otherwise. */
@@ -90,7 +92,7 @@ export async function renderPage(c: Context, options: SsrOptions): Promise<Respo
     return c.redirect(url.pathname.replace(/\/+$/, "") + url.search, 308);
   }
 
-  const match = matchRoute(options.manifest.routes, url.pathname);
+  const match = options.match(url.pathname);
   if (!match) return renderError(c, options, url, 404, "Not Found");
 
   const state: PageState = { url, params: match.params, route: match.route.id, status: 200, error: null, http: c };

@@ -15,3 +15,6 @@ generated/
 # Local SQLite databases
 *.db
 *.db-journal
+
+# Rust build output
+packages/rust-engine/native/target/

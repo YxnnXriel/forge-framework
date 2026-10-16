@@ -125,44 +125,22 @@ function issues(error: z.ZodError) {
   return error.issues.map((i) => ({ path: i.path.map(String).join("."), message: i.message }));
 }
 
-/** Validates `raw`, injects dependencies, runs the handler and validates its result. */
-export async function invoke(
-  view: View,
-  raw: unknown,
-  options: {
-    deps?: Partial<ForgeDeps> | undefined;
-    http?: Context | undefined;
-    /** Remote call: evaluates the view's `access` rule first. */
-    checkAccess?: boolean;
-  } = {},
-): Promise<unknown> {
-  let input: unknown = raw ?? {};
-  if (view.input) {
-    const parsed = view.input.safeParse(input);
-    if (!parsed.success) throw new ValidationError(issues(parsed.error));
-    input = parsed.data;
-  }
+/**
+ * Promise-like check, as `await` does: Prisma queries return a lazy
+ * PrismaPromise (a thenable), not a `Promise` instance.
+ */
+export function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return value !== null && (typeof value === "object" || typeof value === "function") && typeof (value as PromiseLike<unknown>).then === "function";
+}
 
-  const available: Record<string, unknown> = { ...currentDeps(), ...options.deps };
-  if (options.checkAccess && view.access) {
-    const allowed = await view.access({ ...available, input } as never);
-    if (!allowed) throw new HttpError(403, "Forbidden");
-  }
-  let deps: Record<string, unknown> = available;
-  if (view.deps) {
-    deps = {};
-    for (const name of view.deps) {
-      if (!(name in available)) {
-        throw new ForgeError("FORGE_DEP_MISSING", `Dependency "${name}" is declared by the view but not provided`);
-      }
-      deps[name] = available[name];
-    }
-  }
+interface InvokeOptions {
+  deps?: Partial<ForgeDeps> | undefined;
+  http?: Context | undefined;
+  /** Remote call: evaluates the view's `access` rule first. */
+  checkAccess?: boolean;
+}
 
-  const ctx: Record<string, unknown> = { ...deps, input };
-  if (options.http) ctx.http = options.http;
-  const result = await view.handler(ctx as unknown as HandlerContext<unknown>);
-
+function finish(view: View, result: unknown): unknown {
   if (!view.output || result instanceof Response) return result;
   const out = view.output.safeParse(result);
   if (!out.success) {
@@ -173,6 +151,55 @@ export async function invoke(
     );
   }
   return out.data;
+}
+
+function runHandler(view: View, input: unknown, available: Record<string, unknown>, options: InvokeOptions): unknown {
+  let ctx: Record<string, unknown>;
+  if (view.deps) {
+    ctx = { input };
+    for (const name of view.deps) {
+      if (!(name in available)) {
+        throw new ForgeError("FORGE_DEP_MISSING", `Dependency "${name}" is declared by the view but not provided`);
+      }
+      ctx[name] = available[name];
+    }
+  } else {
+    // Dependencies are inherited through the prototype: no copy per call.
+    ctx = Object.create(available) as Record<string, unknown>;
+    ctx.input = input;
+  }
+  if (options.http) ctx.http = options.http;
+  const returned = view.handler(ctx as unknown as HandlerContext<unknown>);
+  return isThenable(returned) ? Promise.resolve(returned).then((r) => finish(view, r)) : finish(view, returned);
+}
+
+/**
+ * Validates `raw`, injects dependencies, runs the handler and validates its
+ * result. Stays synchronous when nothing is asynchronous (no access rule,
+ * sync handler): the hot path allocates no promise.
+ */
+export function run(view: View, raw: unknown, options: InvokeOptions = {}): unknown {
+  let input: unknown = raw ?? {};
+  if (view.input) {
+    const parsed = view.input.safeParse(input);
+    if (!parsed.success) throw new ValidationError(issues(parsed.error));
+    input = parsed.data;
+  }
+  const base = currentDeps() as Record<string, unknown>;
+  const available: Record<string, unknown> = options.deps ? { ...base, ...options.deps } : base;
+  if (options.checkAccess && view.access) {
+    const access = view.access;
+    return (async () => {
+      if (!(await access({ ...available, input } as never))) throw new HttpError(403, "Forbidden");
+      return runHandler(view, input, available, options);
+    })();
+  }
+  return runHandler(view, input, available, options);
+}
+
+/** Async form of `run` (always returns a promise). */
+export async function invoke(view: View, raw: unknown, options: InvokeOptions = {}): Promise<unknown> {
+  return run(view, raw, options);
 }
 
 type AnyDef = Handler<any, any, any> | ViewOptions<any, any, any, any, any, boolean> | View;

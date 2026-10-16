@@ -5,7 +5,8 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "examples/*"
+      "examples/*",
+      "bench"
     ],
     "catalog": {
       "zod": "4.6.7",
@@ -31,7 +32,9 @@
     "example:api": "bun run --filter example-api-only dev",
     "example:full": "bun run --filter example-full-stack dev",
     "example:web": "bun run --filter example-web-only dev",
-    "db:generate": "bun run --filter example-full-stack db:generate"
+    "db:generate": "bun run --filter example-full-stack db:generate",
+    "bench": "bun run --filter forge-bench bench",
+    "build:native": "bun run --filter @forge/rust-engine build"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

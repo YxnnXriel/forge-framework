@@ -1,6 +1,6 @@
 import { ForgeError } from "@forge/core";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
-import { currentDeps, provideDeps, runWithDeps, type ForgeDeps } from "./deps.ts";
+import { inRequestScope, provideDeps, provideRequestDeps, type ForgeDeps } from "./deps.ts";
 import { HttpError, Redirect, ValidationError } from "./errors.ts";
 import { readInput } from "./input.ts";
 import { mountRemote } from "./remote.ts";
@@ -8,7 +8,8 @@ import { endpointsOf, isRepository, type Repository } from "./repository.ts";
 import {
   del,
   get,
-  invoke,
+  run,
+  isThenable,
   patch,
   post,
   put,
@@ -26,12 +27,20 @@ import {
 } from "./view.ts";
 
 function toHonoHandler(endpoint: Endpoint) {
-  return async (c: Context) => {
-    const raw = await readInput(c);
-    const result = await invoke(endpoint, raw, { http: c });
+  const status = (endpoint.status ?? 200) as never;
+  const respond = (c: Context, result: unknown): Response => {
     if (result instanceof Response) return result;
     if (result === undefined) return c.body(null, 204);
-    return c.json(result as never, endpoint.status ?? 200);
+    return c.json(result as never, status);
+  };
+  const execute = (c: Context, raw: Record<string, unknown>) => {
+    const result = inRequestScope(c, () => run(endpoint, raw, { http: c }));
+    return isThenable(result) ? Promise.resolve(result).then((r) => respond(c, r)) : respond(c, result);
+  };
+  // Synchronous end to end for sync handlers on body-less requests.
+  return (c: Context) => {
+    const raw = readInput(c);
+    return raw instanceof Promise ? raw.then((r) => execute(c, r)) : execute(c, raw);
   };
 }
 
@@ -50,7 +59,9 @@ function joinPath(prefix: string, path: string): string {
  *     .mount(posts)                      // 3. defineRepository()
  *
  * Native Hono stays reachable through `.hono` and `.use()` takes any Hono
- * middleware. Routes are matched in registration order.
+ * middleware. Routes are matched in registration order. A native handler
+ * that calls Forge functions can wrap them in `inRequestScope(c, fn)` to get
+ * the request's dependencies (session...).
  */
 export class Router {
   readonly hono = new Hono();
@@ -154,12 +165,10 @@ export interface ServerOptions {
 /** Assembles the application: dependency scope, routes from `urls`, error handling. */
 export function createServer(options: ServerOptions): Hono {
   provideDeps(options.deps ?? {});
+  // No global middleware: the request scope is opened inside Forge handlers,
+  // only when per-request dependencies exist (see inRequestScope).
+  provideRequestDeps(options.requestDeps ?? null);
   const app = new Hono();
-
-  app.use(async (c, next) => {
-    const extra = options.requestDeps ? await options.requestDeps(c) : {};
-    await runWithDeps({ ...currentDeps(), ...extra }, next);
-  });
 
   for (const [prefix, target] of options.urls.entries) app.route(prefix, toHono(target));
   if (options.remote) mountRemote(app, (e) => (options.onUnexpectedError ?? console.error)(e, undefined as never));
