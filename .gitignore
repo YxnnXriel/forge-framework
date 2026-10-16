@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .forge/
+.vercel/
 *.log
 .DS_Store
 
@@ -18,3 +19,6 @@ generated/
 
 # Rust build output
 packages/rust-engine/native/target/
+
+# Your own projects (bun forge new), built against this repository
+projects/

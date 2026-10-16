@@ -44,6 +44,13 @@ describe("resolveConfig", () => {
     expect(issuesOf(() => resolve({ api: {}, db: { provider: "mongo" } }))[0]?.path).toBe("db.provider");
   });
 
+  test("auth requires db", () => {
+    expect(issuesOf(() => resolve({ api: {}, auth: {} }))[0]?.path).toBe("auth");
+    expect(resolve({ api: {}, db: { provider: "sqlite" }, auth: { emailAndPassword: { enabled: true } } }).auth).toEqual({
+      emailAndPassword: { enabled: true },
+    });
+  });
+
   test("server defaults are left to Bun", () => {
     expect(resolve({ api: {} }).server).toEqual({});
   });

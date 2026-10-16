@@ -62,7 +62,7 @@ function scalarLine(name: string, f: ScalarField, provider: Provider, model: str
     if (f.type === "Decimal" && o.precision !== undefined) attrs.push(`@db.Decimal(${o.precision}, ${o.scale ?? 0})`);
   }
   if (o.column) attrs.push(`@map(${JSON.stringify(o.column)})`);
-  return { name, type: f.type + (o.nullable ? "?" : ""), attrs };
+  return { name, type: f.type + (o.list ? "[]" : o.nullable ? "?" : ""), attrs };
 }
 
 /** Prisma type and native attribute of a model's primary key, to type foreign keys. */
@@ -98,6 +98,9 @@ export function generateSchema(classes: readonly ModelClass[], provider: Provide
     names.add(name);
     byClass.set(cls, { name, cls, lines: [], back: [], block: [] });
   }
+
+  const byKey = new Map<string, ModelIR>();
+  for (const ir of byClass.values()) if (ir.cls.key) byKey.set(ir.cls.key, ir);
 
   const enums: string[] = [];
   const enumNames = new Set<string>();
@@ -180,7 +183,7 @@ export function generateSchema(classes: readonly ModelClass[], provider: Provide
       } catch (e) {
         throw new ForgeModelError(`${origin}: could not resolve the target model (${(e as Error).message})`);
       }
-      const target = targetCls && byClass.get(targetCls);
+      const target = targetCls && (byClass.get(targetCls) ?? (targetCls.key ? byKey.get(targetCls.key) : undefined));
       if (!target) {
         throw new ForgeModelError(
           `${origin} references ${targetCls?.name ?? "an unknown model"}, which is not exported from any src/apps/*/models.ts`,

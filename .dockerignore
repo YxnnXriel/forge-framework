@@ -1,0 +1,11 @@
+**/node_modules
+**/.forge
+**/.vercel
+**/generated
+**/target
+**/*.db
+**/*.db-journal
+**/.env
+**/.env.*
+!**/.env.example
+.git

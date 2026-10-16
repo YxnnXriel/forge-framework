@@ -57,13 +57,27 @@ export interface DiscoveredApp {
  * the repository it exports under `forge.<app>`.
  */
 export async function discoverRemotes(appsDir: string): Promise<DiscoveredApp[]> {
-  const apps: DiscoveredApp[] = [];
+  const modules: AppModule[] = [];
   const glob = new Bun.Glob("*/repository.{ts,js}");
   for await (const rel of glob.scan({ cwd: appsDir, onlyFiles: true })) {
     const file = join(appsDir, rel);
-    const name = basename(dirname(file));
-    const mod: Record<string, unknown> = await import(file);
-    const repositories = Object.values(mod).filter(isRepository);
+    modules.push({ name: basename(dirname(file)), file, module: await import(file) });
+  }
+  return registerApps(modules);
+}
+
+/** An app's `repository.ts`, already imported (production build). */
+export interface AppModule {
+  name: string;
+  file: string;
+  module: Record<string, unknown>;
+}
+
+/** Registers the remote functions of already-imported app repositories. */
+export function registerApps(modules: readonly AppModule[]): DiscoveredApp[] {
+  const apps: DiscoveredApp[] = [];
+  for (const { name, file, module } of modules) {
+    const repositories = Object.values(module).filter(isRepository);
     if (repositories.length > 1) {
       throw new ForgeError("FORGE_REMOTE_INVALID", `${file} exports ${repositories.length} repositories; expected one per app`);
     }

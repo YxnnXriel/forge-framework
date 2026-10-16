@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "NODE_ENV=production bun src/main.ts",
+    "dev": "forge dev",
+    "build": "forge build",
+    "start": "forge start",
     "test": "bun test test/",
     "test:e2e": "bun test e2e/",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "forge check",
     "db:generate": "forge db generate",
     "db:migrate": "forge db migrate",
     "seed": "bun src/seed.ts"

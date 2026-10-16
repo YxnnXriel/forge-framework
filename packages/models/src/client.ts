@@ -21,16 +21,27 @@ export async function createPrismaClient(root: string, provider: Provider, url: 
     throw new ForgeError("FORGE_DB_CLIENT", "Prisma Client is not generated yet: run `bun run forge db generate`");
   }
 
-  const { pkg, export: name } = ADAPTERS[provider];
-  let adapterModule: Record<string, new (options: object) => unknown>;
+  const { pkg } = ADAPTERS[provider];
+  let adapterModule: Record<string, unknown>;
   try {
     adapterModule = await import(Bun.resolveSync(pkg, root));
   } catch {
     throw new ForgeError("FORGE_DB_ADAPTER", `Database provider "${provider}" needs ${pkg}: run \`bun add ${pkg}\``);
   }
-  const Adapter = adapterModule[name]!;
-  const adapter = provider === "postgresql" ? new Adapter({ connectionString: url }) : new Adapter({ url });
+  const client = (await import(clientFile)) as PrismaModule;
+  return prismaClientFrom(client, adapterModule, provider, url);
+}
 
-  const { PrismaClient } = (await import(clientFile)) as { PrismaClient: new (options: object) => unknown };
-  return new PrismaClient({ adapter });
+export type PrismaModule = { PrismaClient: new (options: object) => unknown };
+
+/** Same, from already-imported modules (production build: everything is bundled). */
+export function prismaClientFrom(
+  client: PrismaModule,
+  adapterModule: Record<string, unknown>,
+  provider: Provider,
+  url: string,
+): unknown {
+  const Adapter = adapterModule[ADAPTERS[provider].export] as new (options: object) => unknown;
+  const adapter = provider === "postgresql" ? new Adapter({ connectionString: url }) : new Adapter({ url });
+  return new client.PrismaClient({ adapter });
 }

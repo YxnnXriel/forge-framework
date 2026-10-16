@@ -9,7 +9,18 @@ import { join } from "node:path";
  */
 
 const ABI = 1;
-const LIB = join(import.meta.dir, "..", "native", "target", "release", `libforge_engine.${suffix}`);
+/** Library built in place by `cargo build --release`. */
+export const ENGINE_LIBRARY = join(import.meta.dir, "..", "native", "target", "release", `libforge_engine.${suffix}`);
+let LIB = ENGINE_LIBRARY;
+
+/**
+ * Uses another copy of the library (production build: embedded in the
+ * executable or copied next to the bundle). Must run before the first use.
+ */
+export function useEngineLibrary(path: string): void {
+  LIB = path;
+  native = undefined;
+}
 
 const symbols = {
   forge_abi_version: { args: [], returns: FFIType.u32 },

@@ -2,8 +2,8 @@ import { HttpError, Redirect, ValidationError, inRequestScope } from "@forge/ser
 import type { Context } from "hono";
 import type { Component } from "svelte";
 import { render } from "svelte/server";
-import type { ClientAssets } from "./bundle.ts";
-import { runtimeFiles } from "./compile.ts";
+import type { ClientAssets } from "./assets.ts";
+import { ERROR_COMPONENT, ROOT_COMPONENT } from "./paths.ts";
 import type { WebManifest, WebRoute } from "./routes.ts";
 import type { Matcher } from "./server/matcher.ts";
 import { pageScope, type PageState } from "./server/page.ts";
@@ -15,10 +15,16 @@ export interface SsrOptions {
   assets: ClientAssets;
   lang: string;
   onUnexpectedError: (error: unknown) => void;
+  /** Loads a compiled component by source path (or ROOT_COMPONENT / ERROR_COMPONENT). */
+  load: ModuleLoader;
+  /** Extra markup at the end of <body> (dev live reload). */
+  bodyEnd?: string;
 }
 
-async function load(files: string[]): Promise<Component<any>[]> {
-  return (await Promise.all(files.map((f) => import(f)))).map((m) => m.default);
+export type ModuleLoader = (key: string) => Promise<{ default: Component<any> }>;
+
+async function load(options: SsrOptions, files: string[]): Promise<Component<any>[]> {
+  return (await Promise.all(files.map((f) => options.load(f)))).map((m) => m.default);
 }
 
 function escapeJson(value: unknown): string {
@@ -45,7 +51,7 @@ ${parts.head}
 <body>
 <div id="${ROOT_ID}">${parts.body}</div>
 <script type="application/json" id="${STATE_ID}">${escapeJson(parts.state)}</script>
-<script type="module" src="${options.assets.entry}"></script>
+<script type="module" src="${options.assets.entry}"></script>${options.bodyEnd ?? ""}
 </body>
 </html>`;
 }
@@ -63,15 +69,14 @@ async function renderTree(Root: Component<any>, components: Component<any>[], st
 
 /** Renders the error page, inside the root layout when it renders, alone otherwise. */
 async function renderError(c: Context, options: SsrOptions, url: URL, status: number, message: string) {
-  const Root = (await import(runtimeFiles.root)).default;
-  const [ErrorPage] = await load([options.manifest.errorPage ?? runtimeFiles.errorPage]);
+  const [Root, ErrorPage] = await load(options, [ROOT_COMPONENT, options.manifest.errorPage ?? ERROR_COMPONENT]);
   const rootLayout = options.manifest.rootLayout;
   const state: PageState = { url, params: {}, route: "", status, error: { message }, http: c };
 
   for (const withLayout of rootLayout ? [true, false] : [false]) {
     try {
-      const components = withLayout ? [...(await load([rootLayout!])), ErrorPage!] : [ErrorPage!];
-      const out = await renderTree(Root, components, state);
+      const components = withLayout ? [...(await load(options, [rootLayout!])), ErrorPage!] : [ErrorPage!];
+      const out = await renderTree(Root!, components, state);
       const html = document(options, {
         ...out,
         route: null,
@@ -97,9 +102,8 @@ export async function renderPage(c: Context, options: SsrOptions): Promise<Respo
 
   const state: PageState = { url, params: match.params, route: match.route.id, status: 200, error: null, http: c };
   try {
-    const Root = (await import(runtimeFiles.root)).default;
-    const components = await load([...match.route.layouts, match.route.page]);
-    const out = await renderTree(Root, components, state);
+    const [Root, ...components] = await load(options, [ROOT_COMPONENT, ...match.route.layouts, match.route.page]);
+    const out = await renderTree(Root!, components, state);
     const html = document(options, {
       ...out,
       route: match.route,

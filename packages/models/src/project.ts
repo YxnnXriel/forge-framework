@@ -86,9 +86,14 @@ export interface SyncResult {
  * user owns (`schema.prisma`, `prisma.config.ts`) only when they are missing.
  * Never touches hand-written schema files; fails on name conflicts with them.
  */
-export async function syncSchema(root: string, appsDir: string, provider: Provider): Promise<SyncResult> {
+export async function syncSchema(
+  root: string,
+  appsDir: string,
+  provider: Provider,
+  extra: readonly ModelClass[] = [],
+): Promise<SyncResult> {
   const models = await discoverModels(appsDir);
-  const generated = generateSchema(models.map((m) => m.model), provider);
+  const generated = generateSchema([...extra, ...models.map((m) => m.model)], provider);
   const schemaDir = join(root, PRISMA_PATHS.schemaDir);
   const written: string[] = [];
 
@@ -132,10 +137,15 @@ export async function syncSchema(root: string, appsDir: string, provider: Provid
 export type SchemaStatus = "in-sync" | "outdated" | "missing";
 
 /** Compares the models with the generated schema file (no write). */
-export async function schemaStatus(root: string, appsDir: string, provider: Provider): Promise<SchemaStatus> {
+export async function schemaStatus(
+  root: string,
+  appsDir: string,
+  provider: Provider,
+  extra: readonly ModelClass[] = [],
+): Promise<SchemaStatus> {
   const target = join(root, PRISMA_PATHS.generatedSchema);
   if (!existsSync(target)) return "missing";
   const models = await discoverModels(appsDir);
-  const expected = generateSchema(models.map((m) => m.model), provider).hash;
+  const expected = generateSchema([...extra, ...models.map((m) => m.model)], provider).hash;
   return readSchemaHash(await Bun.file(target).text()) === expected ? "in-sync" : "outdated";
 }

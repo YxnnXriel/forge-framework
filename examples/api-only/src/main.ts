@@ -1,4 +1,4 @@
-import { startApp } from "forge";
+import { defineApp } from "forge";
 import { PostStore } from "./store.ts";
 
 const store = new PostStore([
@@ -6,4 +6,4 @@ const store = new PostStore([
   { title: "Brouillon", body: "Pas encore publié.", published: false, authorEmail: "ariel@example.com" },
 ]);
 
-await startApp({ root: import.meta.dir + "/..", deps: { store } });
+export default defineApp({ deps: { store } });

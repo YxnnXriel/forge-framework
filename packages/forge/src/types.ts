@@ -13,7 +13,10 @@ const rel = (from: string, file: string) => {
  *  - `forge:router`: one entry per app exposing remote functions;
  *  - `Forge.Deps.db`: the project's generated Prisma Client, when `db` is enabled.
  */
-export async function writeTypes(root: string, options: { apps: DiscoveredApp[]; db: boolean; clientFile: string }) {
+export async function writeTypes(
+  root: string,
+  options: { apps: DiscoveredApp[]; db: boolean; auth: boolean; clientFile: string },
+) {
   const dir = join(root, ".forge");
   await mkdir(dir, { recursive: true });
   const exposed = options.apps.filter((a) => a.remotes.length > 0);
@@ -23,7 +26,12 @@ export async function writeTypes(root: string, options: { apps: DiscoveredApp[];
   if (exposed.length) lines.push('import type { RemoteApi } from "forge/web";');
   for (const a of exposed) lines.push(`import type * as app_${a.name} from ${JSON.stringify(rel(dir, a.file))};`);
   if (withDb) lines.push(`import type { PrismaClient } from ${JSON.stringify(rel(dir, options.clientFile))};`);
-  if (!exposed.length && !withDb) lines.push("export {};");
+  if (options.auth) {
+    lines.push('import type { AuthInstance, SessionOf } from "forge/auth";');
+    lines.push(`import type config from ${JSON.stringify(rel(dir, join(root, "forge.config.ts")))};`);
+    lines.push('type AuthOptions = Exclude<NonNullable<(typeof config)["auth"]>, false>;');
+  }
+  if (!exposed.length && !withDb && !options.auth) lines.push("export {};");
 
   lines.push(
     "",
@@ -33,8 +41,15 @@ export async function writeTypes(root: string, options: { apps: DiscoveredApp[];
     "  }",
     "}",
   );
-  if (withDb) {
-    lines.push("", "declare global {", "  namespace Forge {", "    interface Deps {", "      db: PrismaClient;", "    }", "  }", "}");
+  if (withDb || options.auth) {
+    lines.push("", "declare global {", "  namespace Forge {", "    interface Deps {");
+    if (withDb) lines.push("      db: PrismaClient;");
+    if (options.auth) {
+      lines.push("      /** Better Auth instance (native API: auth.api.*). */", "      auth: AuthInstance<AuthOptions>;");
+      lines.push("      /** Current session, loaded on first call (at most once per request). */");
+      lines.push("      session: () => Promise<SessionOf<AuthOptions> | null>;");
+    }
+    lines.push("    }", "  }", "}");
   }
 
   const file = join(dir, "types.d.ts");

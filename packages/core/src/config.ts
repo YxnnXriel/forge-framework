@@ -53,6 +53,11 @@ export interface ForgeConfig {
   web?: WebConfig | false;
   /** Prisma integration (models declared in each app's models.ts). */
   db?: DbConfig | false;
+  /**
+   * Better Auth options (native shape). Typed precisely by `defineConfig`
+   * from the `forge` package; requires `db`.
+   */
+  auth?: Record<string, unknown> | false;
   env?: EnvConfig;
 }
 
@@ -63,6 +68,7 @@ export interface ResolvedConfig {
   api: Required<ApiConfig> | null;
   web: Required<WebConfig> | null;
   db: DbConfig | null;
+  auth: Record<string, unknown> | null;
   /** Domain apps (`src/apps/<name>/`), source of remote functions. */
   apps: string;
   env: { private: EnvShape; public: EnvShape };
@@ -98,6 +104,7 @@ const configSchema = z.strictObject({
     .union([z.literal(false), z.strictObject({ dir: z.string().min(1).optional(), lang: z.string().min(1).optional() })])
     .optional(),
   db: z.union([z.literal(false), z.strictObject({ provider: z.enum(["postgresql", "sqlite"]) })]).optional(),
+  auth: z.union([z.literal(false), z.record(z.string(), z.unknown())]).optional(),
   env: z
     .strictObject({
       private: envShapeSchema.optional(),
@@ -149,6 +156,9 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
 
   const db = cfg.db === false || cfg.db === undefined ? null : { provider: cfg.db.provider };
 
+  const auth = cfg.auth === false || cfg.auth === undefined ? null : cfg.auth;
+  if (auth && !db) issues.push({ path: "auth", message: "Better Auth needs a database: add `db: { provider: ... }`" });
+
   if (!api && !web) {
     issues.push({ path: "", message: "no module enabled: declare at least `api` or `web`" });
   }
@@ -167,7 +177,7 @@ export function resolveConfig(input: unknown, options: { root: string; file?: st
   if (cfg.server?.port !== undefined) server.port = cfg.server.port;
   if (cfg.server?.hostname !== undefined) server.hostname = cfg.server.hostname;
 
-  return { root: options.root, server, api, web, db, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
+  return { root: options.root, server, api, web, db, auth, apps: abs(options.root, "src/apps"), env: { private: priv, public: pub } };
 }
 
 export const CONFIG_FILENAME = "forge.config.ts";

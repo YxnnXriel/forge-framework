@@ -4,15 +4,9 @@ import { hashFiles, hashFlavor } from "@forge/rust-engine";
 import type { BunPlugin } from "bun";
 import { VERSION as SVELTE_VERSION, compile, compileModule } from "svelte/compiler";
 
-const here = import.meta.dir;
-export const runtimeFiles = {
-  root: join(here, "runtime/Root.svelte"),
-  errorPage: join(here, "runtime/ErrorPage.svelte"),
-  serverRouter: join(here, "server/router.ts"),
-  serverPage: join(here, "server/page.ts"),
-  clientRouter: join(here, "client/router.ts"),
-  clientPage: join(here, "client/page.ts"),
-};
+import { runtimeFiles } from "./paths.ts";
+
+export { runtimeFiles };
 
 const ts = new Bun.Transpiler({ loader: "ts" });
 
@@ -89,6 +83,18 @@ function svelteLoaders(build: Parameters<BunPlugin["setup"]>[0], options: Compil
     });
     return { contents, loader: "js" };
   });
+}
+
+/** Bundler plugin for the production server bundle (Bun.build, target bun). */
+export function serverBundlePlugin(): BunPlugin {
+  return {
+    name: "forge-svelte-server-bundle",
+    setup(build) {
+      svelteLoaders(build, { generate: "server", dev: false });
+      build.onResolve({ filter: /^forge:router$/ }, () => ({ path: runtimeFiles.serverRouter }));
+      build.onResolve({ filter: /^forge:web$/ }, () => ({ path: runtimeFiles.serverPage }));
+    },
+  };
 }
 
 /** Registered once in the server process (Bun.plugin): SSR imports `.svelte` directly. */

@@ -12,7 +12,14 @@
       "types": "./ambient.d.ts"
     },
     "./models": "./src/models.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./auth": "./src/auth.ts",
+    "./auth/client": "./src/auth-client.ts",
+    "./internal/build": "./src/manifest.ts",
+    "./internal/dev": "./src/dev-entry.ts",
+    "./cli": "./src/cli-api.ts",
+    "./internal/auth": "./src/internal-auth.ts",
+    "./internal/types": "./src/internal-types.ts"
   },
   "dependencies": {
     "@forge/core": "workspace:*",
@@ -22,7 +29,9 @@
     "@forge/web": "workspace:*",
     "hono": "catalog:",
     "@forge/models": "workspace:*",
-    "@forge/cli": "workspace:*"
+    "@forge/cli": "workspace:*",
+    "@forge/auth": "workspace:*",
+    "@forge/rust-engine": "workspace:*"
   },
   "bin": {
     "forge": "./src/cli.ts"

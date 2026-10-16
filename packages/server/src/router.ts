@@ -160,6 +160,8 @@ export interface ServerOptions {
   onUnexpectedError?: (error: unknown, c: Context) => void;
   /** Mounts `POST /__forge/rpc/:name` for functions marked `remote: true`. */
   remote?: boolean;
+  /** Routes registered before the application's (e.g. Better Auth's /api/auth/*). */
+  beforeRoutes?: (app: Hono) => void;
 }
 
 /** Assembles the application: dependency scope, routes from `urls`, error handling. */
@@ -169,6 +171,7 @@ export function createServer(options: ServerOptions): Hono {
   // only when per-request dependencies exist (see inRequestScope).
   provideRequestDeps(options.requestDeps ?? null);
   const app = new Hono();
+  options.beforeRoutes?.(app);
 
   for (const [prefix, target] of options.urls.entries) app.route(prefix, toHono(target));
   if (options.remote) mountRemote(app, (e) => (options.onUnexpectedError ?? console.error)(e, undefined as never));
@@ -188,7 +191,16 @@ export function createServer(options: ServerOptions): Hono {
   return app;
 }
 
-/** Starts the app with `Bun.serve`. Port/hostname default to Bun's own resolution. */
+/**
+ * Starts the app with `Bun.serve`. `PORT` / `HOST` from the environment win
+ * over the config (hosting platforms assign them); then Bun's defaults.
+ */
 export function serve(app: Hono, server: { port?: number; hostname?: string } = {}) {
-  return Bun.serve({ fetch: app.fetch, ...server });
+  const port = Bun.env.PORT ? Number(Bun.env.PORT) : server.port;
+  const hostname = Bun.env.HOST ?? server.hostname;
+  return Bun.serve({
+    fetch: app.fetch,
+    ...(port !== undefined ? { port } : {}),
+    ...(hostname !== undefined ? { hostname } : {}),
+  });
 }

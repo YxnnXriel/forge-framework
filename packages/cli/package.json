@@ -9,6 +9,9 @@
   },
   "dependencies": {
     "@forge/core": "workspace:*",
-    "@forge/models": "workspace:*"
+    "@forge/models": "workspace:*",
+    "@forge/auth": "workspace:*",
+    "@forge/web": "workspace:*",
+    "@forge/rust-engine": "workspace:*"
   }
 }

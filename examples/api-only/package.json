@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/main.ts",
-    "start": "bun src/main.ts",
+    "dev": "forge dev",
+    "build": "forge build",
+    "start": "forge start",
     "test": "bun test"
   },
   "dependencies": {

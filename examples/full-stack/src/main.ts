@@ -1,8 +1,5 @@
-import { startApp } from "forge";
-import { demoUser } from "./deps.ts";
+import { defineApp } from "forge";
 
-await startApp({
-  root: `${import.meta.dir}/..`,
-  deps: { user: null },
-  requestDeps: demoUser,
-});
+// The app's own wiring (extra dependencies, hooks). Nothing needed here:
+// the database, Better Auth and the session come from forge.config.ts.
+export default defineApp({});

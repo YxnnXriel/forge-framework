@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import * as devalue from "devalue";
 import type { App } from "forge";
-import { dbReady, freshApp } from "./setup.ts";
+import { dbReady, freshApp, signUp } from "./setup.ts";
 
 describe.skipIf(!dbReady)("full-stack", () => {
   let app: App["app"];
@@ -69,9 +69,9 @@ describe.skipIf(!dbReady)("full-stack", () => {
       expect(post.likes).toBe(6);
     });
 
-    test("create: access rule, transaction, tags connectOrCreate, unique slugs", async () => {
+    test("create: Better Auth session required, author from the session, tags, unique slugs", async () => {
       expect((await rpc("posts.create", { title: "x" })).status).toBe(403);
-      const cookie = { cookie: "demo_user=lea" };
+      const cookie = { cookie: await signUp(app, "lea") };
       const first = devalue.parse(await (await rpc("posts.create", { title: "Été à Abidjan", tags: ["svelte", "voyage"] }, cookie)).text());
       expect(first.data.slug).toBe("ete-a-abidjan");
       expect(first.data.author.name).toBe("lea");
@@ -79,6 +79,35 @@ describe.skipIf(!dbReady)("full-stack", () => {
       expect(second.data.slug).toBe("ete-a-abidjan-2");
       expect(await deps.db!.tag.count()).toBe(3); // "svelte" reused, "voyage" created
       expect(await deps.db!.user.count({ where: { email: "lea@example.com" } })).toBe(1);
+      expect(await deps.db!.account.count({ where: { providerId: "credential" } })).toBe(2); // ariel + lea
+    });
+
+    test("account.me reflects the session; pages render the user", async () => {
+      expect(devalue.parse(await (await rpc("account.me", null)).text()).data).toBeNull();
+      const cookie = await signUp(app, "sam");
+      const me = devalue.parse(await (await rpc("account.me", null, { cookie })).text()).data;
+      expect(me).toEqual({ name: "sam", email: "sam@example.com" });
+      expect(await (await app.request("/dashboard", { headers: { cookie } })).text()).toContain("Bonjour sam");
+      expect(await (await app.request("/dashboard")).text()).toContain("Connexion");
+    });
+
+    test("Better Auth's native API is mounted and usable", async () => {
+      const cookie = await signUp(app, "max");
+      const res = await app.request("/api/auth/get-session", { headers: { cookie } });
+      expect((await res.json()).user.email).toBe("max@example.com");
+      const user = await deps.auth!.api.getSession({ headers: new Headers({ cookie }) });
+      expect(user?.user.name).toBe("max");
+    });
+
+    test("the session is never read when a handler does not ask for it", async () => {
+      let lookups = 0;
+      const original = deps.auth!.api.getSession;
+      deps.auth!.api.getSession = ((...args: Parameters<typeof original>) => (lookups++, original(...args))) as typeof original;
+      await app.request("/api/posts", { headers: { cookie: "better-auth.session_token=whatever" } });
+      expect(lookups).toBe(0);
+      await rpc("account.me", null);
+      expect(lookups).toBe(1);
+      deps.auth!.api.getSession = original;
     });
 
     test("only remote functions are reachable; validation; CSRF", async () => {

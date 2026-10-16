@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { forge } from "forge:router";
   import { page } from "forge:web";
   let { children } = $props();
+
+  // Current user (Better Auth session, read lazily on the server).
+  const me = await forge.account.me();
 
   // Local state: survives client-side navigations (the layout is not re-created).
   let clicks = $state(0);
@@ -17,6 +21,7 @@
     <a href="/posts" aria-current={page.route.startsWith("/posts") ? "page" : undefined}>Articles</a>
     <a href="/dashboard" aria-current={page.route.startsWith("/dashboard") ? "page" : undefined}>Dashboard</a>
   </nav>
+  <span class="me">{me ? me.name : "invité"}</span>
   <button class="layout-counter" onclick={() => clicks++}>layout : {clicks}</button>
 </header>
 

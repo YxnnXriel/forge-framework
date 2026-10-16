@@ -1,3 +1,4 @@
+import { authenticated } from "forge/auth";
 import { defineRepository, error, z } from "forge/server";
 import { PostInput, PublicPost, slugify } from "./schemas.ts";
 
@@ -49,26 +50,20 @@ export const posts = defineRepository(({ get, post }) => ({
     output: PublicPost,
     status: 201,
     remote: true,
-    access: ({ user }) => user !== null,
-    handler: async ({ input, db, user }) => {
+    access: authenticated,
+    handler: async ({ input, db, session }) => {
+      const { user } = (await session())!; // guaranteed by `access`
       const base = slugify(input.title) || "article";
       const taken = await db.post.count({ where: { slug: { startsWith: base } } });
-      return db.$transaction(async (tx) => {
-        const author = await tx.user.upsert({
-          where: { email: `${user!.name}@example.com` },
-          create: { email: `${user!.name}@example.com`, name: user!.name },
-          update: {},
-        });
-        return tx.post.create({
-          data: {
-            title: input.title,
-            body: input.body,
-            slug: taken ? `${base}-${taken + 1}` : base,
-            author: { connect: { id: author.id } },
-            tags: { connectOrCreate: input.tags.map((label) => ({ where: { label }, create: { label } })) },
-          },
-          include: withRelations,
-        });
+      return db.post.create({
+        data: {
+          title: input.title,
+          body: input.body,
+          slug: taken ? `${base}-${taken + 1}` : base,
+          author: { connect: { id: user.id } },
+          tags: { connectOrCreate: input.tags.map((label) => ({ where: { label }, create: { label } })) },
+        },
+        include: withRelations,
       });
     },
   }),

@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { chromium, type Browser, type Page } from "playwright-core";
-import { dbReady, freshApp } from "../test/setup.ts";
+import { dbReady, freshApp, root, startBuiltServer } from "../test/setup.ts";
 
 // Browser tests need a Chromium: FORGE_CHROMIUM=/path/to/chromium, or one
 // installed for playwright-core. Skipped (with a notice) when none is found.
@@ -14,21 +14,30 @@ const executablePath = Bun.env.FORGE_CHROMIUM ?? chromium.executablePath();
 const hasBrowser = Boolean(executablePath && existsSync(executablePath));
 if (!hasBrowser) console.warn("[e2e] Chromium not found, browser tests skipped. Set FORGE_CHROMIUM=/path/to/chromium.");
 
-describe.skipIf(!hasBrowser || !dbReady)("browser", () => {
+// Same scenarios against the app from source and against the production build
+// (`forge build`: bundled server, prebuilt pages, precompressed assets).
+for (const mode of ["source", "build"] as const)
+describe.skipIf(!hasBrowser || !dbReady)(`browser (${mode})`, () => {
   let browser: Browser;
-  let server: ReturnType<typeof Bun.serve>;
   let base: string;
+  let stop: () => void | Promise<void>;
 
   beforeAll(async () => {
     const { app } = await freshApp();
-    server = Bun.serve({ port: 0, fetch: app.fetch });
-    base = server.url.href.replace(/\/$/, "");
-      browser = await chromium.launch({ executablePath });
-  }, 60_000);
+    if (mode === "source") {
+      const server = Bun.serve({ port: 0, fetch: app.fetch });
+      base = server.url.href.replace(/\/$/, "");
+      stop = () => server.stop(true);
+    } else {
+      // Same seeded database (DATABASE_URL set by freshApp), served by the build.
+      ({ base, stop } = await startBuiltServer(root));
+    }
+    browser = await chromium.launch({ executablePath });
+  }, 120_000);
 
   afterAll(async () => {
     await browser?.close();
-    server?.stop(true);
+    await stop?.();
   });
 
   async function open(path: string) {
@@ -121,16 +130,24 @@ describe.skipIf(!hasBrowser || !dbReady)("browser", () => {
     });
   });
 
-  describe("remote calls and access control", () => {
-    test("access rule rejects anonymous users and accepts a session", async () => {
-      const { page } = await open("/dashboard");
-      await page.fill("input[name=title]", "Depuis le navigateur");
-      await page.click("button[type=submit]");
-      await until(() => text(page, ".message"), "Erreur 403 : Forbidden");
+  describe("Better Auth", () => {
+    test("sign up in the browser, then create a post as the signed-in user", async () => {
+      const { page, errors } = await open("/dashboard");
+      expect(await text(page, ".me")).toBe("invité");
+      await page.fill("input[name=name]", "Nina");
+      await page.fill("input[name=email]", "nina@example.com");
+      await page.fill("input[name=password]", "very-secret-password");
+      await page.click("button.sign-up");
+      await until(() => text(page, "h1"), "Bonjour Nina");
+      expect(await text(page, ".me")).toBe("Nina");
 
-      await page.context().addCookies([{ name: "demo_user", value: "ariel", url: base }]);
-      await page.click("button[type=submit]");
+      await page.fill("input[name=title]", "Depuis le navigateur");
+      await page.click(".create button[type=submit]");
       await until(() => text(page, ".message"), "Créé : depuis-le-navigateur");
+
+      await page.click("button.sign-out");
+      await until(() => text(page, ".me"), "invité");
+      expect(errors).toEqual([]);
       await page.close();
     });
   });

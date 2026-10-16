@@ -2,7 +2,7 @@ import { ForgeError } from "@forge/core";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
-import { currentDeps, type ForgeDeps } from "./deps.ts";
+import { currentDeps, globalDepsObject, type ForgeDeps } from "./deps.ts";
 import { HttpError, ValidationError } from "./errors.ts";
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -164,8 +164,12 @@ function runHandler(view: View, input: unknown, available: Record<string, unknow
       ctx[name] = available[name];
     }
   } else {
-    // Dependencies are inherited through the prototype: no copy per call.
-    ctx = Object.create(available) as Record<string, unknown>;
+    // Global dependencies are inherited from one stable prototype (no copy, and
+    // the same object shape on every request so engine inline caches stay
+    // fast); only request-scoped/overridden entries are copied.
+    const global = globalDepsObject();
+    ctx = Object.create(global) as Record<string, unknown>;
+    if (available !== global) for (const key of Object.keys(available)) ctx[key] = available[key];
     ctx.input = input;
   }
   if (options.http) ctx.http = options.http;

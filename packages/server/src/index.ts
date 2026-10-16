@@ -35,6 +35,8 @@ export { isUrls } from "./router.ts";
 export {
   registerRemotes,
   discoverRemotes,
+  registerApps,
+  type AppModule,
   clearRemotes,
   listRemotes,
   callRemote,

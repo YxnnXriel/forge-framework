@@ -1,51 +1,29 @@
 import { parseArgs } from "node:util";
-import { ForgeError, loadConfig, type ResolvedConfig } from "@forge/core";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { PRISMA_PATHS, migrationName, runPrisma, schemaStatus, syncSchema } from "@forge/models";
-import { listMigrations } from "@forge/models/testing";
-import { databaseUrl } from "./db-url.ts";
+import { ForgeError } from "@forge/core/errors";
+import type { Out } from "./util.ts";
+
+// Commands are imported on demand: `forge start` never loads the bundler,
+// `forge db` never loads Svelte.
 
 const HELP = `forge <command>
 
+  forge new <name>             New project (in projects/ inside the Forge repository)
+        [--template full|api|web] [--db sqlite|postgresql|none] [--no-auth] [--no-install]
+  forge startapp <name>        New app in src/apps (models, schemas, repository, page),
+        [--no-page]            wired into src/urls.ts and the layout
+  forge dev                    Run from source, restart on change, reload open pages
+  forge build [--compile]      Production build in .forge/build (server.js, or one executable)
+              [--target vercel] also .vercel/output (automatic when VERCEL is set)
+  forge start [--migrate]      Run the production build (--migrate: apply migrations first)
+  forge check                  Config, models/schema sync, types
+  forge setup docker|vercel    Deployment files (Dockerfile for Dokploy/Railway, vercel.json)
+
 Database (needs \`db\` in forge.config.ts):
-  forge db generate            Models -> ${PRISMA_PATHS.generatedSchema}, then Prisma Client
-  forge db migrate             generate + create and apply a migration (development);
-                               named automatically (initial, post_likes...), --name to override
-  forge db deploy              Apply pending migrations (production, CI)
+  forge db generate            Models -> Prisma schema, then Prisma Client
+  forge db migrate [-n name]   Create and apply a migration (development, named automatically)
+  forge db deploy              Apply pending migrations (production, CI; no Prisma engine needed)
   forge db status              Models/schema sync + migration status
 `;
-
-type Out = { log: (msg: string) => void; error: (msg: string) => void };
-
-async function dbConfig(root: string): Promise<ResolvedConfig & { db: NonNullable<ResolvedConfig["db"]> }> {
-  const config = await loadConfig(root);
-  if (!config.db) {
-    throw new ForgeError("FORGE_DB_DISABLED", "No `db` in forge.config.ts: add `db: { provider: \"postgresql\" | \"sqlite\" }`");
-  }
-  return config as ResolvedConfig & { db: NonNullable<ResolvedConfig["db"]> };
-}
-
-/** Environment for Prisma: .env is loaded by Bun; SQLite paths made absolute. */
-function prismaEnv(root: string, config: { db: { provider: "postgresql" | "sqlite" } }) {
-  const url = Bun.env.DATABASE_URL;
-  return url ? { DATABASE_URL: databaseUrl(root, config.db.provider, url) } : {};
-}
-
-async function prisma(root: string, args: string[], env: Record<string, string>, out: Out): Promise<number> {
-  const { code } = await runPrisma(root, args, { env, inherit: true });
-  if (code !== 0) out.error(`prisma ${args.join(" ")} failed (exit ${code})`);
-  return code;
-}
-
-async function generate(root: string, out: Out): Promise<number> {
-  const config = await dbConfig(root);
-  const result = await syncSchema(root, config.apps, config.db.provider);
-  out.log(`Models: ${result.models.join(", ") || "(none)"}`);
-  for (const file of result.written) out.log(`  wrote ${file}`);
-  if (!result.written.length) out.log("  schema already up to date");
-  return prisma(root, ["generate"], prismaEnv(root, config), out);
-}
 
 export async function run(argv: string[], options: { root?: string; out?: Out } = {}): Promise<number> {
   const root = options.root ?? process.cwd();
@@ -53,39 +31,67 @@ export async function run(argv: string[], options: { root?: string; out?: Out } 
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { name: { type: "string", short: "n" }, help: { type: "boolean", short: "h" } },
+    strict: false,
+    options: {
+      name: { type: "string", short: "n" },
+      help: { type: "boolean", short: "h" },
+      compile: { type: "boolean" },
+      target: { type: "string" },
+      template: { type: "string", short: "t" },
+      migrate: { type: "boolean" },
+      force: { type: "boolean" },
+      db: { type: "string" },
+      auth: { type: "boolean" },
+      "no-auth": { type: "boolean" },
+      "no-install": { type: "boolean" },
+      "no-page": { type: "boolean" },
+      dir: { type: "string" },
+    },
   });
-  const [group, command] = positionals;
+  const [command, sub] = positionals;
 
   try {
-    if (values.help || !group) {
+    if (values.help || !command) {
       out.log(HELP);
       return 0;
     }
-    if (group === "db" && command === "generate") return await generate(root, out);
-    if (group === "db" && command === "migrate") {
-      const code = await generate(root, out);
-      if (code !== 0) return code;
-      const config = await dbConfig(root);
-      const snapshotFile = join(root, PRISMA_PATHS.snapshot);
-      const current = await Bun.file(join(root, PRISMA_PATHS.generatedSchema)).text();
-      const previous = existsSync(snapshotFile) ? await Bun.file(snapshotFile).text() : null;
-      const first = (await listMigrations(root)).length === 0;
-      const name = values.name ?? migrationName(previous, current, first);
-      out.log(`Migration: ${name}`);
-      const result = await prisma(root, ["migrate", "dev", "--name", name], prismaEnv(root, config), out);
-      if (result === 0) await Bun.write(snapshotFile, current);
-      return result;
-    }
-    if (group === "db" && command === "deploy") {
-      const config = await dbConfig(root);
-      return await prisma(root, ["migrate", "deploy"], prismaEnv(root, config), out);
-    }
-    if (group === "db" && command === "status") {
-      const config = await dbConfig(root);
-      const status = await schemaStatus(root, config.apps, config.db.provider);
-      out.log(`Schema: ${status}${status === "in-sync" ? "" : " (run `forge db generate`)"}`);
-      return await prisma(root, ["migrate", "status"], prismaEnv(root, config), out);
+    switch (command) {
+      case "dev":
+        return await (await import("./commands/dev.ts")).dev(root, out);
+      case "build": {
+        const target = values.target;
+        if (target !== undefined && target !== "bun" && target !== "vercel") {
+          out.error(`Unknown target "${String(target)}" (bun, vercel)`);
+          return 1;
+        }
+        return await (await import("./commands/build.ts")).build(root, { compile: values.compile === true, ...(target ? { target } : {}) }, out);
+      }
+      case "start":
+        return await (await import("./commands/start.ts")).start(root, values.migrate ? ["start", "--migrate"] : ["start"], out);
+      case "check":
+        return await (await import("./commands/check.ts")).check(root, out);
+      case "new": {
+        const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+        const target = str(values.target) ?? str(values.template);
+        return await (await import("./commands/new.ts")).newProject(
+          root,
+          {
+            name: sub,
+            install: values["no-install"] !== true,
+            ...(target ? { template: target } : {}),
+            ...(str(values.db) ? { db: str(values.db)! } : {}),
+            ...(values["no-auth"] ? { auth: false } : values.auth ? { auth: true } : {}),
+            ...(str(values.dir) ? { dir: str(values.dir)! } : {}),
+          },
+          out,
+        );
+      }
+      case "startapp":
+        return await (await import("./commands/startapp.ts")).startapp(root, sub, { page: values["no-page"] !== true }, out);
+      case "setup":
+        return await (await import("./commands/setup.ts")).setup(root, sub, values.force === true, out);
+      case "db":
+        return await (await import("./commands/db.ts")).db(root, sub, { ...(typeof values.name === "string" ? { name: values.name } : {}) }, out);
     }
     out.error(`Unknown command: ${positionals.join(" ")}\n\n${HELP}`);
     return 1;

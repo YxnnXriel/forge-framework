@@ -28,6 +28,11 @@ export function runWithDeps<T>(deps: Partial<ForgeDeps>, fn: () => T): T {
   return requestScope.run(deps, fn);
 }
 
+/** The process-wide dependencies object (stable identity: used as prototype). */
+export function globalDepsObject(): Partial<ForgeDeps> {
+  return globalDeps;
+}
+
 /** Current dependencies: request scope if any, otherwise the global ones. */
 export function currentDeps(): Partial<ForgeDeps> {
   return requestScope.getStore() ?? globalDeps;
@@ -49,9 +54,10 @@ export function provideRequestDeps(provider: RequestDepsProvider | null): void {
  */
 export function inRequestScope<T>(c: Context, fn: () => T | Promise<T>): T | Promise<T> {
   if (!requestProvider) return fn(); // no extra promise on the hot path
-  const provider = requestProvider;
-  return (async () => {
-    const extra = await provider(c);
-    return requestScope.run({ ...globalDeps, ...extra }, fn);
-  })();
+  const extra = requestProvider(c);
+  if (extra instanceof Promise) {
+    return extra.then((deps) => requestScope.run(Object.assign(Object.create(globalDeps), deps), fn));
+  }
+  // Synchronous providers (e.g. the lazy session getter) stay synchronous.
+  return requestScope.run(Object.assign(Object.create(globalDeps), extra), fn);
 }

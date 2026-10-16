@@ -1,16 +1,16 @@
 import { join, resolve } from "node:path";
 import { ForgeError } from "@forge/core";
 import { clientPlugin, runtimeFiles } from "./compile.ts";
-import type { WebManifest, WebRoute } from "./routes.ts";
+import { preloadsFrom, type AssetFile, type ClientAssets } from "./assets.ts";
+import type { WebManifest } from "./routes.ts";
 import { ASSETS_PREFIX } from "./shared/constants.ts";
 
-export interface ClientAssets {
-  /** Public URL of the entry module. */
-  entry: string;
-  /** File name -> content, served under ASSETS_PREFIX. */
-  files: Map<string, Blob>;
-  /** Public URLs to `modulepreload` for a route (its layouts and page chunks). */
-  preloads(route: WebRoute | null): string[];
+export type { ClientAssets };
+
+/** Client bundle plus what a production build needs to write it out. */
+export interface BuiltClient extends ClientAssets {
+  /** Source file -> output file name (for preloads). */
+  chunks: Map<string, string>;
 }
 
 const imp = (file: string) => `() => import(${JSON.stringify(file)})`;
@@ -36,7 +36,7 @@ start(routes, loadError);
 }
 
 /** Builds the browser bundle in memory with Bun.build (code splitting per page). */
-export async function buildClient(manifest: WebManifest, options: { root: string; dev: boolean }): Promise<ClientAssets> {
+export async function buildClient(manifest: WebManifest, options: { root: string; dev: boolean }): Promise<BuiltClient> {
   const entryPath = join(options.root, ".forge", "entry.client.ts");
   const result = await Bun.build({
     entrypoints: [entryPath],
@@ -57,11 +57,11 @@ export async function buildClient(manifest: WebManifest, options: { root: string
     throw new ForgeError("FORGE_WEB_BUILD", `Client build failed:\n${result.logs.map(String).join("\n")}`);
   }
 
-  const files = new Map<string, Blob>();
+  const files = new Map<string, AssetFile>();
   let entry = "";
   for (const output of result.outputs) {
     const name = output.path.replace(/^\.\//, "").split("/").pop()!;
-    files.set(name, output);
+    files.set(name, { body: output, type: output.type });
     if (output.kind === "entry-point") entry = ASSETS_PREFIX + name;
   }
 
@@ -77,14 +77,10 @@ export async function buildClient(manifest: WebManifest, options: { root: string
   return {
     entry,
     files,
-    preloads(route) {
-      if (!route) return [];
-      const urls = new Set<string>();
-      for (const file of [...route.layouts, route.page]) {
-        const chunk = chunkOf.get(file);
-        if (chunk) urls.add(ASSETS_PREFIX + chunk);
-      }
-      return [...urls];
-    },
+    chunks: chunkOf,
+    preloads: preloadsFrom((file) => {
+      const chunk = chunkOf.get(file);
+      return chunk && ASSETS_PREFIX + chunk;
+    }),
   };
 }

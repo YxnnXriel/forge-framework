@@ -26,6 +26,8 @@ export interface ScalarField {
     scale?: number;
     uuid?: boolean;
     updatedAt?: boolean;
+    /** Scalar list (`String[]`), Postgres only. */
+    list?: boolean;
   };
 }
 
@@ -71,6 +73,12 @@ export abstract class Model {
   static timestamps = false;
   /** Table name (`@@map`). Default: the model name. */
   static table: string | undefined = undefined;
+  /**
+   * Identity shared by a placeholder and the real model it stands for (e.g.
+   * `AuthUser` from forge/auth and the user table generated from Better Auth).
+   * Relations to a placeholder resolve to the model with the same key.
+   */
+  static key: string | undefined = undefined;
 }
 
 export type ModelClass = typeof Model;

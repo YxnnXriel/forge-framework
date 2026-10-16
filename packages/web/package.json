@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
     "./ambient": "./src/ambient.d.ts",
-    "./errors": "./src/shared/errors.ts"
+    "./errors": "./src/shared/errors.ts",
+    "./runtime": "./src/runtime.ts"
   },
   "dependencies": {
     "@forge/core": "workspace:*",
